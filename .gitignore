@@ -1,0 +1,7 @@
+# Executable directories
+debug/
+release/
+
+# clangd entries
+.cache/
+compile_commands.json
