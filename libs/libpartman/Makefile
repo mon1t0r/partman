@@ -1,6 +1,6 @@
 # Compiler configuration
 CC:=gcc
-CFLAGS:=-Iinclude/ -Werror -Wall -ansi -pedantic
+CFLAGS:=-Iinclude/ -Werror -Wall -ansi -pedantic -Wno-long-long
 
 # ar configuration
 AR:=ar

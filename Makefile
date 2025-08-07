@@ -1,6 +1,6 @@
 # Compiler configuration
 CC:=gcc
-CFLAGS:=-Iinclude/ -Ilibs/libpartman/include/ -Werror -Wall -ansi -pedantic
+CFLAGS:=-Iinclude/ -Ilibs/libpartman/include/ -Werror -Wall -ansi -pedantic -Wno-long-long
 LDLIBS:=
 
 # Local libraries configuration

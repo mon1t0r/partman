@@ -1,11 +1,10 @@
 #include <stdio.h>
 
-#include "lib_test.h"
-
 int main(void)
 {
-    printf("Hello from partman!\n");
-    lib_print_hello();
+    /* TODO: Open file for writing */
+
+    /* TODO: Create empty MBR partition table */
 
     return 0;
 }
