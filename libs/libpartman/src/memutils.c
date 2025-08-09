@@ -7,49 +7,26 @@ void write_int8(unsigned char *buf, unsigned char i)
 
 void write_int16(unsigned char *buf, unsigned short i)
 {
-#ifdef HOST_BIG_ENDIAN
-    buf[0] = (i << 8) & 0xFF;
-    buf[1] = (i << 0) & 0xFF;
-#else
-    buf[0] = (i << 0) & 0xFF;
-    buf[1] = (i << 8) & 0xFF;
-#endif
+    buf[0] = (i >> 0) & 0xFF;
+    buf[1] = (i >> 8) & 0xFF;
 }
 
 void write_int32(unsigned char *buf, unsigned long i)
 {
-#ifdef HOST_BIG_ENDIAN
-    buf[0] = (i << 24) & 0xFF;
-    buf[1] = (i << 16) & 0xFF;
-    buf[2] = (i << 8 ) & 0xFF;
-    buf[3] = (i << 0 ) & 0xFF;
-#else
-    buf[0] = (i << 0 ) & 0xFF;
-    buf[1] = (i << 8 ) & 0xFF;
-    buf[2] = (i << 16) & 0xFF;
-    buf[3] = (i << 24) & 0xFF;
-#endif
+    buf[0] = (i >> 0 ) & 0xFF;
+    buf[1] = (i >> 8 ) & 0xFF;
+    buf[2] = (i >> 16) & 0xFF;
+    buf[3] = (i >> 24) & 0xFF;
 }
 
 void write_int64(unsigned char *buf, unsigned long long i)
 {
-#ifdef HOST_BIG_ENDIAN
-    buf[0] = (i << 56) & 0xFF;
-    buf[1] = (i << 48) & 0xFF;
-    buf[2] = (i << 40) & 0xFF;
-    buf[3] = (i << 32) & 0xFF;
-    buf[4] = (i << 24) & 0xFF;
-    buf[5] = (i << 16) & 0xFF;
-    buf[6] = (i << 8 ) & 0xFF;
-    buf[7] = (i << 0 ) & 0xFF;
-#else
-    buf[0] = (i << 0 ) & 0xFF;
-    buf[1] = (i << 8 ) & 0xFF;
-    buf[2] = (i << 16) & 0xFF;
-    buf[3] = (i << 24) & 0xFF;
-    buf[4] = (i << 32) & 0xFF;
-    buf[5] = (i << 40) & 0xFF;
-    buf[6] = (i << 48) & 0xFF;
-    buf[7] = (i << 56) & 0xFF;
-#endif
+    buf[0] = (i >> 0 ) & 0xFF;
+    buf[1] = (i >> 8 ) & 0xFF;
+    buf[2] = (i >> 16) & 0xFF;
+    buf[3] = (i >> 24) & 0xFF;
+    buf[4] = (i >> 32) & 0xFF;
+    buf[5] = (i >> 40) & 0xFF;
+    buf[6] = (i >> 48) & 0xFF;
+    buf[7] = (i >> 56) & 0xFF;
 }
