@@ -25,19 +25,17 @@ static void mbr_part_write(unsigned char *buf, const struct mbr_part *mbr_part)
     write_int32(buf + 8, mbr_part->start_lba);
 
     /* Number of sectors */
-    write_int32(buf + 12, mbr_part->size_lba);
+    write_int32(buf + 12, mbr_part->sz_lba);
 }
 
 void mbr_write(unsigned char *buf, const struct mbr *mbr)
 {
-    /* Bootstrap code */
-    memset(buf, 0, 440);
+    /* Bootstrap code 440 bytes */
 
-    /* Disk signature */
+    /* Disk signature, 4 bytes */
     write_int32(buf + 440, mbr->disk_sig);
 
-    /* Unknowm 2-byte field */
-    memset(buf + 444, 0, 2);
+    /* Unknowm field, 2 bytes */
 
     /* Partitions, 16 bytes each */
     mbr_part_write(buf + 446, &mbr->partitions[0]);
@@ -45,6 +43,6 @@ void mbr_write(unsigned char *buf, const struct mbr *mbr)
     mbr_part_write(buf + 478, &mbr->partitions[2]);
     mbr_part_write(buf + 494, &mbr->partitions[3]);
 
-    /* Boot signature */
+    /* Boot signature, 2 bytes */
     write_int16(buf + 510, 0x55AA);
 }

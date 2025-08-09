@@ -19,7 +19,7 @@ struct mbr_part {
     unsigned long start_lba;
 
     /* 4-byte number of sectors in partition */
-    unsigned long size_lba;
+    unsigned long sz_lba;
 };
 
 /* Master Boot Record structure */
@@ -29,6 +29,11 @@ struct mbr {
 
     /* Partition table (4 primary partitions) */
     struct mbr_part partitions[4];
+};
+
+enum {
+    /* MBR size, in sectors */
+    mbr_sz_secs = 1
 };
 
 void mbr_write(unsigned char *buf, const struct mbr *mbr);
