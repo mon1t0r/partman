@@ -24,7 +24,7 @@ struct mbr_part {
 
 /* Master Boot Record structure */
 struct mbr {
-    /* 4-byte disk signature */
+    /* 4-byte unique disk signature */
     unsigned long disk_sig;
 
     /* Partition table (4 primary partitions) */
@@ -37,5 +37,11 @@ enum {
 };
 
 void mbr_write(unsigned char *buf, const struct mbr *mbr);
+
+void mbr_read(const unsigned char *buf, struct mbr *mbr);
+
+int mbr_detect(const unsigned char *buf);
+
+void mbr_init_protective(struct mbr *mbr);
 
 #endif
