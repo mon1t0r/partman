@@ -6,39 +6,59 @@
 #include "img_ctx.h"
 
 unsigned long long
-secs_to_bytes(const struct img_ctx *ctx, unsigned long long secs)
+lba_to_byte(const struct img_ctx *ctx, unsigned long long secs)
 {
     return secs * ctx->sec_sz;
 }
 
 unsigned long long
-bytes_to_secs(const struct img_ctx *ctx, unsigned long long bytes)
+byte_to_lba(const struct img_ctx *ctx, unsigned long long bytes)
 {
 #if 0
-    return (bytes + (ctx->sec_zs-1)) / ctx->sec_sz;
+    return (bytes + (ctx->sec_sz-1)) / ctx->sec_sz;
 #else
     return bytes / ctx->sec_sz + (bytes % ctx->sec_sz ? 1 : 0);
 #endif
 }
 
-int img_ctx_init(struct img_ctx *ctx, unsigned long long sec_sz,
-                 unsigned long long img_sz)
+void lba_to_chs(const struct img_ctx *ctx, unsigned long long lba,
+                unsigned char chs[3])
 {
-    if(sec_sz > img_sz) {
-        fprintf(stderr, "Sector/image size invalid: Image must contain at "
-                "least 1 sector\n");
-        return 0;
+    /* Cylinders * Heads * Sectors */
+    unsigned long long max_lba = 0xFF * ctx->hpc * ctx->spt;
+
+    if(lba > max_lba) {
+        lba = max_lba;
     }
 
-    if(sec_sz <= 0) {
-        fprintf(stderr, "Sector size invalid: Must be greater than 0\n");
-        return 0;
-    }
+    /* Cylinders */
+    chs[0] = lba / (ctx->hpc * ctx->spt);
 
+    /* Heads */
+    chs[1] = (lba / ctx->spt) % ctx->hpc;
+
+    /* Sectors */
+    chs[2] = (lba % ctx->spt) + 1;
+}
+
+unsigned long long
+lba_align(const struct img_ctx *ctx, unsigned long long lba)
+{
+    /* Next aligned LBA after input LBA */
+    return (lba / ctx->align) * ctx->align;
+}
+
+int img_ctx_init(struct img_ctx *ctx, unsigned long long img_sz)
+{
     memset(ctx, 0, sizeof(*ctx));
 
-    ctx->sec_sz = sec_sz;
     ctx->img_sz = img_sz;
+
+    /* Default values */
+    ctx->sec_sz = 512;         /* 512 bytes per sector   */
+    ctx->align  = 1024*1024*1; /* 1 MiB alignment        */
+    ctx->hpc    = 255;         /* 255 heads per cylinder */
+    ctx->spt    = 63;          /* 63 sectors per track   */
 
     return 1;
 }
@@ -48,7 +68,7 @@ int img_ctx_map(struct img_ctx *ctx, int img_fd, int map_gpt)
     /* img_fd size here must be greater or equal to ctx->img_sz,
      * otherwise mmap() behavior will be undefined */
 
-    ctx->mbr_reg = mmap(NULL, secs_to_bytes(ctx, mbr_sz_secs),
+    ctx->mbr_reg = mmap(NULL, lba_to_byte(ctx, mbr_sz_secs),
                         PROT_READ|PROT_WRITE, MAP_SHARED,
                         img_fd, 0);
     if(ctx->mbr_reg == MAP_FAILED) {
@@ -74,7 +94,7 @@ int img_ctx_unmap(struct img_ctx *ctx)
 {
     int c;
 
-    c = munmap(ctx->mbr_reg, secs_to_bytes(ctx, mbr_sz_secs));
+    c = munmap(ctx->mbr_reg, lba_to_byte(ctx, mbr_sz_secs));
     if(c == -1) {
         perror("munmap()");
         fprintf(stderr, "Failed to unmap image MBR\n");

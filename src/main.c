@@ -1,3 +1,6 @@
+/* lseek64() */
+#define _LARGEFILE64_SOURCE
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -9,9 +12,6 @@
 enum {
     /* Input buffer size, in bytes */
     input_buf_sz = 256,
-
-    /* Used logical sector size, in bytes. Will be configurable in future */
-    used_sector_size = 512,
 
     /* Used image size, in bytes. Will be configurable in future */
     used_image_size = 2048
@@ -67,8 +67,6 @@ static int user_routine(struct img_ctx *ctx, int img_fd)
     char buf[input_buf_sz];
     char *s;
 
-    printf("partman 1.0\n\n");
-
     for(;;) {
         printf("Command (m for help): ");
 
@@ -88,14 +86,14 @@ static int user_routine(struct img_ctx *ctx, int img_fd)
     }
 }
 
-static int img_ensure_size(int img_fd, unsigned long img_sz)
+static int img_ensure_size(int img_fd, unsigned long long img_sz)
 {
-    long s;
+    long long s;
     char buf;
 
-    s = lseek(img_fd, 0, SEEK_END);
+    s = lseek64(img_fd, 0, SEEK_END);
     if(s == -1) {
-        perror("lseek()");
+        perror("lseek64()");
         return 0;
     }
 
@@ -105,9 +103,9 @@ static int img_ensure_size(int img_fd, unsigned long img_sz)
     }
 
     /* Seek and write a single byte to ensure image size */
-    s = lseek(img_fd, img_sz - 1, SEEK_SET);
+    s = lseek64(img_fd, img_sz - 1, SEEK_SET);
     if(s == -1) {
-        perror("lseek()");
+        perror("lseek64()");
         return 0;
     }
 
@@ -150,13 +148,16 @@ int main(int argc, const char * const *argv)
     }
 
     /* Initialize context */
-    img_ctx_init(&ctx, used_sector_size, used_image_size);
+    img_ctx_init(&ctx, used_image_size);
 
     /* Map image parts to memory */
     img_ctx_map(&ctx, img_fd, 0);
 
+    printf("partman 1.0\n\n");
+
     /* If MBR detected, read MBR  */
     if(mbr_detect(ctx.mbr_reg)) {
+        printf("MBR detected!\n");
         mbr_read(ctx.mbr_reg, &ctx.mbr);
     }
 

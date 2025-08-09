@@ -1,6 +1,10 @@
 #include "mbr.h"
 #include "memutils.h"
 
+enum {
+    mbr_boot_sig = 0xAA55
+};
+
 static void mbr_part_write(unsigned char *buf, const struct mbr_part *mbr_part)
 {
     /* Boot indicator */
@@ -67,7 +71,7 @@ void mbr_write(unsigned char *buf, const struct mbr *mbr)
     mbr_part_write(buf + 494, &mbr->partitions[3]);
 
     /* Boot signature, 2 bytes */
-    write_int16(buf + 510, 0x55AA);
+    write_int16(buf + 510, mbr_boot_sig);
 }
 
 void mbr_read(const unsigned char *buf, struct mbr *mbr)
@@ -84,7 +88,7 @@ void mbr_read(const unsigned char *buf, struct mbr *mbr)
 
 int mbr_detect(const unsigned char *buf)
 {
-    return read_int16(buf + 510) == 0x55AA;
+    return read_int16(buf + 510) == mbr_boot_sig;
 }
 
 void mbr_init_protective(struct mbr *mbr)

@@ -4,11 +4,20 @@
 #include "mbr.h"
 
 struct img_ctx {
-    /* Logical sector size, in bytes */
+    /* Logical sector (block) size, in bytes */
     unsigned long long sec_sz;
 
     /* Image size, in bytes */
     unsigned long long img_sz;
+
+    /* Partition alignment, in bytes */
+    unsigned long long align;
+
+    /* Maximum logical number of heads per cylinder */
+    unsigned long hpc;
+
+    /* Maximum logical number of sectors per track */
+    unsigned long spt;
 
     /* In-memory MBR structure */
     struct mbr mbr;
@@ -24,13 +33,18 @@ struct img_ctx {
 };
 
 unsigned long long
-secs_to_bytes(const struct img_ctx *ctx, unsigned long long secs);
+lba_to_byte(const struct img_ctx *ctx, unsigned long long secs);
 
 unsigned long long
-bytes_to_secs(const struct img_ctx *ctx, unsigned long long bytes);
+byte_to_lba(const struct img_ctx *ctx, unsigned long long bytes);
 
-int img_ctx_init(struct img_ctx *ctx, unsigned long long sec_sz,
-                 unsigned long long img_sz);
+void lba_to_chs(const struct img_ctx *ctx, unsigned long long lba,
+                unsigned char chs[3]);
+
+unsigned long long
+lba_align(const struct img_ctx *ctx, unsigned long long lba);
+
+int img_ctx_init(struct img_ctx *ctx, unsigned long long img_sz);
 
 int img_ctx_map(struct img_ctx *ctx, int img_fd, int map_gpt);
 
