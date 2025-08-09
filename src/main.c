@@ -1,39 +1,206 @@
+#include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 
 #include "img_ctx.h"
 
 enum {
-    sec_sz = 512,
-    img_sz = 2048
+    /* Input buffer size, in bytes */
+    input_buf_sz = 256,
+
+    /* Used logical sector size, in bytes. Will be configurable in future */
+    used_sector_size = 512,
+
+    /* Used image size, in bytes. Will be configurable in future */
+    used_image_size = 2048
 };
 
-int main(void)
+static void mbr_print(const struct mbr *mbr)
 {
-    /* Testing code */
+    int i;
+    const struct mbr_part *part;
 
-    int fd;
-    char buf[1];
+    printf("Disk signature: %lx\n", mbr->disk_sig);
+
+    for(i = 0; i < sizeof(mbr->partitions) / sizeof(mbr->partitions[0]); i++) {
+        part = &mbr->partitions[i];
+
+        /* Empty partition */
+        if(part->type == 0) {
+            continue;
+        }
+
+        printf("Partition #%d:\n", i);
+        printf("Boot indicator %d\n", part->boot_ind);
+        printf("Type           %d\n", part->type);
+        printf("Start C/H/S    %d/%d/%d\n", part->start_chs[0],
+               part->start_chs[1], part->start_chs[2]);
+        printf("End C/H/S      %d/%d/%d\n", part->end_chs[0],
+               part->end_chs[1], part->end_chs[2]);
+        printf("Start LBA      %ld\n", part->start_lba);
+        printf("Sectors        %ld\n\n", part->sz_lba);
+    }
+}
+
+static int action_handle(struct img_ctx *ctx, int img_fd, int in)
+{
+    switch(in) {
+        /* Help */
+        case 'm':
+            printf("*help should be here*\n");
+            break;
+
+        /* Print the partition table */
+        case 'p':
+            mbr_print(&ctx->mbr);
+            break;
+    }
+
+    return 1;
+}
+
+static int user_routine(struct img_ctx *ctx, int img_fd)
+{
+    int c;
+    char buf[input_buf_sz];
+    char *s;
+
+    printf("partman 1.0\n\n");
+
+    for(;;) {
+        printf("Command (m for help): ");
+
+        s = fgets(buf, sizeof(buf), stdin);
+
+        printf("\n");
+
+        /* Character + '\n' */
+        if(s == NULL || strlen(s) != 2) {
+            return EXIT_SUCCESS;
+        }
+
+        c = action_handle(ctx, img_fd, s[0]);
+        if(!c) {
+            return EXIT_FAILURE;
+        }
+    }
+}
+
+static int img_ensure_size(int img_fd, unsigned long img_sz)
+{
+    long s;
+    char buf;
+
+    s = lseek(img_fd, 0, SEEK_END);
+    if(s == -1) {
+        perror("lseek()");
+        return 0;
+    }
+
+    /* If image already has required size, return */
+    if(s >= img_sz) {
+        return 1;
+    }
+
+    /* Seek and write a single byte to ensure image size */
+    s = lseek(img_fd, img_sz - 1, SEEK_SET);
+    if(s == -1) {
+        perror("lseek()");
+        return 0;
+    }
+
+    buf = 0;
+    s = write(img_fd, &buf, 1);
+    if(s == -1) {
+        perror("write()");
+        return 0;
+    }
+
+    return 1;
+}
+
+int main(int argc, const char * const *argv)
+{
+    int img_fd;
+    int code;
     struct img_ctx ctx;
 
-    fd = open("test.bin", O_RDWR|O_CREAT|O_TRUNC, 0666);
+    /* Image file not specified */
+    if(argc < 2) {
+        fprintf(stderr, "Usage: %s [FILE]\n", argv[0]);
+        return EXIT_FAILURE;
+    }
 
-    lseek(fd, img_sz - 1, SEEK_SET);
+    /* Open file */
+    img_fd = open(argv[1], O_RDWR|O_CREAT, 0666);
+    if(img_fd == -1) {
+        perror("open()");
+        fprintf(stderr, "Unable to open %s\n", argv[1]);
+        return EXIT_FAILURE;
+    }
 
-    buf[0] = 0;
-    write(fd, buf, 1);
+    /* Ensure img_fd has required size */
+    code = img_ensure_size(img_fd, used_image_size);
+    if(!code) {
+        fprintf(stderr, "Unable to ensure image size\n");
+        code = EXIT_FAILURE;
+        goto exit;
+    }
 
-    img_ctx_init(&ctx, sec_sz, img_sz);
-    img_ctx_map(&ctx, fd, 0);
+    /* Initialize context */
+    img_ctx_init(&ctx, used_sector_size, used_image_size);
 
-    ctx.mbr.partitions[0].start_lba = 0x00001122;
-    ctx.mbr.partitions[0].sz_lba = 0xAABBCCDD;
+    /* Map image parts to memory */
+    img_ctx_map(&ctx, img_fd, 0);
+
+    /* If MBR detected, read MBR  */
+    if(mbr_detect(ctx.mbr_reg)) {
+        mbr_read(ctx.mbr_reg, &ctx.mbr);
+    }
+
+#if 0
+    /* TODO: DEBUG CODE, REMOVE! */
+
+    ctx.mbr.partitions[0].boot_ind = 0x0;
+    ctx.mbr.partitions[0].type = 0xAB;
+    ctx.mbr.partitions[0].start_chs[0] = 0x11;
+    ctx.mbr.partitions[0].start_chs[1] = 0x22;
+    ctx.mbr.partitions[0].start_chs[2] = 0x33;
+    ctx.mbr.partitions[0].end_chs[0] = 0x44;
+    ctx.mbr.partitions[0].end_chs[1] = 0x55;
+    ctx.mbr.partitions[0].end_chs[2] = 0x66;
+    ctx.mbr.partitions[0].start_lba = 0xAABBCCDD;
+    ctx.mbr.partitions[0].sz_lba = 0xCCDDEEFF;
+
+    ctx.mbr.partitions[1].boot_ind = 0x80;
+    ctx.mbr.partitions[1].type = 0xCD;
+    ctx.mbr.partitions[1].start_chs[0] = 0x33;
+    ctx.mbr.partitions[1].start_chs[1] = 0x22;
+    ctx.mbr.partitions[1].start_chs[2] = 0x11;
+    ctx.mbr.partitions[1].end_chs[0] = 0x66;
+    ctx.mbr.partitions[1].end_chs[1] = 0x55;
+    ctx.mbr.partitions[1].end_chs[2] = 0x44;
+    ctx.mbr.partitions[1].start_lba = 0xDDCCBBAA;
+    ctx.mbr.partitions[1].sz_lba = 0xFFEEDDCC;
 
     mbr_write(ctx.mbr_reg, &ctx.mbr);
 
-    img_ctx_unmap(&ctx);
-    close(fd);
+    goto exit;
 
-    return 0;
+#endif
+
+    /* Start user routine */
+    code = user_routine(&ctx, img_fd);
+    if(!code) {
+        code = EXIT_FAILURE;
+        goto exit;
+    }
+
+exit:
+    img_ctx_unmap(&ctx);
+    close(img_fd);
+
+    return code;
 }

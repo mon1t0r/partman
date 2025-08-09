@@ -26,12 +26,12 @@ int img_ctx_init(struct img_ctx *ctx, unsigned long long sec_sz,
 {
     if(sec_sz > img_sz) {
         fprintf(stderr, "Sector/image size invalid: Image must contain at "
-                "least 1 sector");
+                "least 1 sector\n");
         return 0;
     }
 
     if(sec_sz <= 0) {
-        fprintf(stderr, "Sector size invalid: Must be greater than 0");
+        fprintf(stderr, "Sector size invalid: Must be greater than 0\n");
         return 0;
     }
 
@@ -53,7 +53,7 @@ int img_ctx_map(struct img_ctx *ctx, int img_fd, int map_gpt)
                         img_fd, 0);
     if(ctx->mbr_reg == MAP_FAILED) {
         perror("mmap()");
-        fprintf(stderr, "Failed to map image MBR");
+        fprintf(stderr, "Failed to map image MBR\n");
         return 0;
     }
 
@@ -77,7 +77,7 @@ int img_ctx_unmap(struct img_ctx *ctx)
     c = munmap(ctx->mbr_reg, secs_to_bytes(ctx, mbr_sz_secs));
     if(c == -1) {
         perror("munmap()");
-        fprintf(stderr, "Failed to unmap image MBR");
+        fprintf(stderr, "Failed to unmap image MBR\n");
         return 0;
     }
 
