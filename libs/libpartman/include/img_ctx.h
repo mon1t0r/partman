@@ -33,7 +33,7 @@ struct img_ctx {
 };
 
 unsigned long long
-lba_to_byte(const struct img_ctx *ctx, unsigned long long secs);
+lba_to_byte(const struct img_ctx *ctx, unsigned long long lba);
 
 unsigned long long
 byte_to_lba(const struct img_ctx *ctx, unsigned long long bytes);

@@ -86,9 +86,14 @@ void mbr_read(const unsigned char *buf, struct mbr *mbr)
     mbr_part_read(buf + 494, &mbr->partitions[3]);
 }
 
-int mbr_detect(const unsigned char *buf)
+int mbr_is_present(const unsigned char *buf)
 {
     return read_int16(buf + 510) == mbr_boot_sig;
+}
+
+int mbr_is_part_used(const struct mbr_part *part)
+{
+    return part->type != 0 && part->sz_lba != 0;
 }
 
 void mbr_init_protective(struct mbr *mbr)

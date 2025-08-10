@@ -1,4 +1,5 @@
 /* lseek64() */
+#include "mbr.h"
 #define _LARGEFILE64_SOURCE
 
 #include <stdlib.h>
@@ -28,7 +29,7 @@ static void mbr_print(const struct mbr *mbr)
         part = &mbr->partitions[i];
 
         /* Empty partition */
-        if(part->type == 0) {
+        if(!mbr_is_part_used(part)) {
             continue;
         }
 
@@ -156,7 +157,7 @@ int main(int argc, const char * const *argv)
     printf("partman 1.0\n\n");
 
     /* If MBR detected, read MBR  */
-    if(mbr_detect(ctx.mbr_reg)) {
+    if(mbr_is_present(ctx.mbr_reg)) {
         printf("MBR detected!\n");
         mbr_read(ctx.mbr_reg, &ctx.mbr);
     }

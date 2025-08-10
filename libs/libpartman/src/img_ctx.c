@@ -45,7 +45,7 @@ unsigned long long
 lba_align(const struct img_ctx *ctx, unsigned long long lba)
 {
     /* Next aligned LBA after input LBA */
-    return (lba / ctx->align) * ctx->align;
+    return (lba / ctx->align + 1) * ctx->align;
 }
 
 int img_ctx_init(struct img_ctx *ctx, unsigned long long img_sz)

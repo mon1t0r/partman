@@ -3,28 +3,28 @@
 
 /* MBR partition structure */
 struct mbr_part {
-    /* 1-byte boot indicator */
+    /* Boot indicator */
     unsigned char boot_ind;
 
-    /* 3-byte CHS address of first absolute sector in partition */
+    /* CHS address of first absolute sector in partition */
     unsigned char start_chs[3];
 
-    /* 1-byte partition type */
+    /* Partition type */
     unsigned char type;
 
-    /* 3-byte CHS address of last absolute sector in partition */
+    /* CHS address of last absolute sector in partition */
     unsigned char end_chs[3];
 
-    /* 4-byte LBA of first absolute sector in the partition */
+    /* LBA of first absolute sector in the partition */
     unsigned long start_lba;
 
-    /* 4-byte number of sectors in partition */
+    /* Number of sectors in partition */
     unsigned long sz_lba;
 };
 
-/* Master Boot Record structure */
+/* Master Boot Record (MBR) structure */
 struct mbr {
-    /* 4-byte unique disk signature */
+    /* Unique disk signature */
     unsigned long disk_sig;
 
     /* Partition table (4 primary partitions) */
@@ -40,7 +40,9 @@ void mbr_write(unsigned char *buf, const struct mbr *mbr);
 
 void mbr_read(const unsigned char *buf, struct mbr *mbr);
 
-int mbr_detect(const unsigned char *buf);
+int mbr_is_present(const unsigned char *buf);
+
+int mbr_is_part_used(const struct mbr_part *part);
 
 void mbr_init_protective(struct mbr *mbr);
 
