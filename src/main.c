@@ -1,5 +1,4 @@
 /* lseek64() */
-#include "mbr.h"
 #define _LARGEFILE64_SOURCE
 
 #include <stdlib.h>
@@ -8,6 +7,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include "partman_types.h"
 #include "img_ctx.h"
 
 enum {
@@ -22,7 +22,7 @@ static void mbr_print(const struct mbr *mbr)
 {
     const struct mbr_part *part;
     int i;
-    unsigned long c, h, s;
+    pu32 c, h, s;
 
     printf("Disk signature: %lx\n", mbr->disk_sig);
 
@@ -49,9 +49,9 @@ static void mbr_print(const struct mbr *mbr)
     }
 }
 
-static int action_handle(struct img_ctx *ctx, int img_fd, int in)
+static pres action_handle(struct img_ctx *ctx, int img_fd, int sym)
 {
-    switch(in) {
+    switch(sym) {
         /* Help */
         case 'm':
             printf("*help should be here*\n");
@@ -63,14 +63,14 @@ static int action_handle(struct img_ctx *ctx, int img_fd, int in)
             break;
     }
 
-    return 1;
+    return pres_succ;
 }
 
-static int user_routine(struct img_ctx *ctx, int img_fd)
+static pres user_routine(struct img_ctx *ctx, int img_fd)
 {
-    int c;
     char buf[input_buf_sz];
     char *s;
+    pres r;
 
     for(;;) {
         printf("Command (m for help): ");
@@ -81,54 +81,54 @@ static int user_routine(struct img_ctx *ctx, int img_fd)
 
         /* Character + '\n' */
         if(s == NULL || strlen(s) != 2) {
-            return EXIT_SUCCESS;
+            return pres_succ;
         }
 
-        c = action_handle(ctx, img_fd, s[0]);
-        if(!c) {
-            return EXIT_FAILURE;
+        r = action_handle(ctx, img_fd, s[0]);
+        if(!r) {
+            return pres_fail;
         }
     }
 }
 
-static int img_ensure_size(int img_fd, unsigned long long img_sz)
+static pres img_ensure_size(int img_fd, pu64 img_sz)
 {
     long long s;
-    char buf;
+    char c;
 
     s = lseek64(img_fd, 0, SEEK_END);
     if(s == -1) {
         perror("lseek64()");
-        return 0;
+        return pres_fail;
     }
 
     /* If image already has required size, return */
     if(s >= img_sz) {
-        return 1;
+        return pres_succ;
     }
 
     /* Seek and write a single byte to ensure image size */
     s = lseek64(img_fd, img_sz - 1, SEEK_SET);
     if(s == -1) {
         perror("lseek64()");
-        return 0;
+        return pres_fail;
     }
 
-    buf = 0;
-    s = write(img_fd, &buf, 1);
+    c = 0;
+    s = write(img_fd, &c, 1);
     if(s == -1) {
         perror("write()");
-        return 0;
+        return pres_fail;
     }
 
-    return 1;
+    return pres_succ;
 }
 
 int main(int argc, const char * const *argv)
 {
     int img_fd;
-    int code;
     struct img_ctx ctx;
+    pres r;
 
     /* Image file not specified */
     if(argc < 2) {
@@ -145,10 +145,9 @@ int main(int argc, const char * const *argv)
     }
 
     /* Ensure img_fd has required size */
-    code = img_ensure_size(img_fd, used_image_size);
-    if(!code) {
+    r = img_ensure_size(img_fd, used_image_size);
+    if(!r) {
         fprintf(stderr, "Unable to ensure image size\n");
-        code = EXIT_FAILURE;
         goto exit;
     }
 
@@ -156,7 +155,11 @@ int main(int argc, const char * const *argv)
     img_ctx_init(&ctx, used_image_size);
 
     /* Map image parts to memory */
-    img_ctx_map(&ctx, img_fd, 0);
+    r = img_ctx_map(&ctx, img_fd, 0);
+    if(!r) {
+        fprintf(stderr, "Faild to map image to memory\n");
+        goto exit;
+    }
 
     printf("partman 1.0\n\n");
 
@@ -192,15 +195,17 @@ int main(int argc, const char * const *argv)
 #endif
 
     /* Start user routine */
-    code = user_routine(&ctx, img_fd);
-    if(!code) {
-        code = EXIT_FAILURE;
+    r = user_routine(&ctx, img_fd);
+    if(!r) {
         goto exit;
     }
+
+    /* No error branch */
+    r = pres_succ;
 
 exit:
     img_ctx_unmap(&ctx);
     close(img_fd);
 
-    return code;
+    return r ? EXIT_SUCCESS : EXIT_FAILURE;
 }

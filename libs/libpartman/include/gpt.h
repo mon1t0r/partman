@@ -1,45 +1,46 @@
 #ifndef LIBPARTMAN_GPT_H
 #define LIBPARTMAN_GPT_H
 
+#include "partman_types.h"
 #include "guid.h"
 
 /* GUID Partition Table (GPT) header structure */
 struct gpt_hdr {
     /* Revision number */
-    unsigned long rev;
+    pu32 rev;
 
     /* Header size, in bytes */
-    unsigned long hdr_sz;
+    pu32 hdr_sz;
 
     /* Header CRC32 checksum */
-    unsigned long hdr_crc32;
+    pu32 hdr_crc32;
 
     /* LBA of the primary header */
-    unsigned long long my_lba;
+    pu64 my_lba;
 
     /* LBA of the alternate header */
-    unsigned long long alt_lba;
+    pu64 alt_lba;
 
     /* LBA of the first sector, which can be used by a partition */
-    unsigned long long first_usable_lba;
+    pu64 first_usable_lba;
 
     /* LBA of the last sector, which can be used by a partition */
-    unsigned long long last_usable_lba;
+    pu64 last_usable_lba;
 
     /* Disk GUID */
     struct guid disk_guid;
 
     /* LBA of the partition entry array */
-    unsigned long long part_table_lba;
+    pu64 part_table_lba;
 
     /* Number of partition entries in the partition entry array */
-    unsigned long part_entry_cnt;
+    pu32 part_entry_cnt;
 
     /* Partition entry size, in bytes */
-    unsigned long part_entry_sz;
+    pu32 part_entry_sz;
 
     /* Partition entry array CRC32 checksum */
-    unsigned long part_table_crc32;
+    pu32 part_table_crc32;
 };
 
 /* GPT partition entry structure */
@@ -51,16 +52,16 @@ struct gpt_part {
     struct guid unique_guid;
 
     /* LBA of the first sector, used by a partition */
-    unsigned long long start_lba;
+    pu64 start_lba;
 
     /* LBA of the last sector, used by a partition */
-    unsigned long long end_lba;
+    pu64 end_lba;
 
     /* Attributes bit field */
-    unsigned long long attr;
+    pu64 attr;
 
     /* Name of the partition, using UCS-2 */
-    unsigned short name[36];
+    pu32 name[36];
 };
 
 #endif

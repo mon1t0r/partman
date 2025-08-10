@@ -1,24 +1,24 @@
 #include "memutils.h"
 
-void write_int8(unsigned char *buf, unsigned char i)
+void write_pu8(pu8 *buf, pu8 i)
 {
     buf[0] = i & 0xFF;
 }
 
-void write_int16(unsigned char *buf, unsigned short i)
+void write_pu16(pu8 *buf, pu16 i)
 {
     buf[0] = (i >> 0) & 0xFF;
     buf[1] = (i >> 8) & 0xFF;
 }
 
-void write_int24(unsigned char *buf, unsigned long i)
+void write_pu24(pu8 *buf, pu32 i)
 {
     buf[0] = (i >> 0 ) & 0xFF;
     buf[1] = (i >> 8 ) & 0xFF;
     buf[2] = (i >> 16) & 0xFF;
 }
 
-void write_int32(unsigned char *buf, unsigned long i)
+void write_pu32(pu8 *buf, pu32 i)
 {
     buf[0] = (i >> 0 ) & 0xFF;
     buf[1] = (i >> 8 ) & 0xFF;
@@ -26,7 +26,7 @@ void write_int32(unsigned char *buf, unsigned long i)
     buf[3] = (i >> 24) & 0xFF;
 }
 
-void write_int64(unsigned char *buf, unsigned long long i)
+void write_pu64(pu8 *buf, pu64 i)
 {
     buf[0] = (i >> 0 ) & 0xFF;
     buf[1] = (i >> 8 ) & 0xFF;
@@ -38,40 +38,40 @@ void write_int64(unsigned char *buf, unsigned long long i)
     buf[7] = (i >> 56) & 0xFF;
 }
 
-unsigned char read_int8(const unsigned char *buf)
+pu8 read_pu8(const pu8 *buf)
 {
     return buf[0];
 }
 
-unsigned short read_int16(const unsigned char *buf)
+pu16 read_pu16(const pu8 *buf)
 {
-    return ((unsigned short) buf[0] << 0) |
-           ((unsigned short) buf[1] << 8);
+    return ((pu16) buf[0] << 0) |
+           ((pu16) buf[1] << 8);
 }
 
-unsigned long read_int24(const unsigned char *buf)
+pu32 read_pu24(const pu8 *buf)
 {
-    return ((unsigned long) buf[0] << 0)  |
-           ((unsigned long) buf[1] << 8)  |
-           ((unsigned long) buf[2] << 16);
+    return ((pu32) buf[0] << 0)  |
+           ((pu32) buf[1] << 8)  |
+           ((pu32) buf[2] << 16);
 }
 
-unsigned long read_int32(const unsigned char *buf)
+pu32 read_pu32(const pu8 *buf)
 {
-    return ((unsigned long) buf[0] << 0)  |
-           ((unsigned long) buf[1] << 8)  |
-           ((unsigned long) buf[2] << 16) |
-           ((unsigned long) buf[3] << 24);
+    return ((pu32) buf[0] << 0)  |
+           ((pu32) buf[1] << 8)  |
+           ((pu32) buf[2] << 16) |
+           ((pu32) buf[3] << 24);
 }
 
-unsigned long long read_int64(const unsigned char *buf)
+pu64 read_pu64(const pu8 *buf)
 {
-    return ((unsigned long long) buf[0] << 0)  |
-           ((unsigned long long) buf[1] << 8)  |
-           ((unsigned long long) buf[2] << 16) |
-           ((unsigned long long) buf[3] << 24) |
-           ((unsigned long long) buf[4] << 32) |
-           ((unsigned long long) buf[5] << 40) |
-           ((unsigned long long) buf[6] << 48) |
-           ((unsigned long long) buf[7] << 56);
+    return ((pu64) buf[0] << 0)  |
+           ((pu64) buf[1] << 8)  |
+           ((pu64) buf[2] << 16) |
+           ((pu64) buf[3] << 24) |
+           ((pu64) buf[4] << 32) |
+           ((pu64) buf[5] << 40) |
+           ((pu64) buf[6] << 48) |
+           ((pu64) buf[7] << 56);
 }

@@ -5,54 +5,54 @@ enum {
     mbr_boot_sig = 0xAA55
 };
 
-static void mbr_part_write(unsigned char *buf, const struct mbr_part *mbr_part)
+static void mbr_part_write(pu8 *buf, const struct mbr_part *mbr_part)
 {
     /* Boot indicator */
-    write_int8(buf, mbr_part->boot_ind);
+    write_pu8(buf, mbr_part->boot_ind);
 
     /* Start CHS */
-    write_int24(buf + 1, mbr_part->start_chs);
+    write_pu24(buf + 1, mbr_part->start_chs);
 
     /* Partition type */
-    write_int8(buf + 4, mbr_part->type);
+    write_pu8(buf + 4, mbr_part->type);
 
     /* End CHS */
-    write_int24(buf + 5, mbr_part->end_chs);
+    write_pu24(buf + 5, mbr_part->end_chs);
 
     /* Start sector LBA */
-    write_int32(buf + 8, mbr_part->start_lba);
+    write_pu32(buf + 8, mbr_part->start_lba);
 
     /* Number of sectors */
-    write_int32(buf + 12, mbr_part->sz_lba);
+    write_pu32(buf + 12, mbr_part->sz_lba);
 }
 
-static void mbr_part_read(const unsigned char *buf, struct mbr_part *mbr_part)
+static void mbr_part_read(const pu8 *buf, struct mbr_part *mbr_part)
 {
     /* Boot indicator */
-    mbr_part->boot_ind = read_int8(buf);
+    mbr_part->boot_ind = read_pu8(buf);
 
     /* Start CHS */
-    mbr_part->start_chs = read_int24(buf + 1);
+    mbr_part->start_chs = read_pu24(buf + 1);
 
     /* Partition type */
-    mbr_part->type = read_int8(buf + 4);
+    mbr_part->type = read_pu8(buf + 4);
 
     /* End CHS */
-    mbr_part->end_chs = read_int24(buf + 5);
+    mbr_part->end_chs = read_pu24(buf + 5);
 
     /* Start sector LBA */
-    mbr_part->start_lba = read_int32(buf + 8);
+    mbr_part->start_lba = read_pu32(buf + 8);
 
     /* Number of sectors */
-    mbr_part->sz_lba = read_int32(buf + 12);
+    mbr_part->sz_lba = read_pu32(buf + 12);
 }
 
-void mbr_write(unsigned char *buf, const struct mbr *mbr)
+void mbr_write(pu8 *buf, const struct mbr *mbr)
 {
     /* Bootstrap code 440 bytes */
 
     /* Disk signature, 4 bytes */
-    write_int32(buf + 440, mbr->disk_sig);
+    write_pu32(buf + 440, mbr->disk_sig);
 
     /* Unknowm field, 2 bytes */
 
@@ -63,13 +63,13 @@ void mbr_write(unsigned char *buf, const struct mbr *mbr)
     mbr_part_write(buf + 494, &mbr->partitions[3]);
 
     /* Boot signature, 2 bytes */
-    write_int16(buf + 510, mbr_boot_sig);
+    write_pu16(buf + 510, mbr_boot_sig);
 }
 
-void mbr_read(const unsigned char *buf, struct mbr *mbr)
+void mbr_read(const pu8 *buf, struct mbr *mbr)
 {
     /* Disk signature */
-    mbr->disk_sig = read_int32(buf + 440);
+    mbr->disk_sig = read_pu32(buf + 440);
 
     /* Partitions */
     mbr_part_read(buf + 446, &mbr->partitions[0]);
@@ -78,12 +78,12 @@ void mbr_read(const unsigned char *buf, struct mbr *mbr)
     mbr_part_read(buf + 494, &mbr->partitions[3]);
 }
 
-int mbr_is_present(const unsigned char *buf)
+pflag mbr_is_present(const pu8 *buf)
 {
-    return read_int16(buf + 510) == mbr_boot_sig;
+    return read_pu16(buf + 510) == mbr_boot_sig;
 }
 
-int mbr_is_part_used(const struct mbr_part *part)
+pflag mbr_is_part_used(const struct mbr_part *part)
 {
     return part->type != 0 && part->sz_lba != 0;
 }
