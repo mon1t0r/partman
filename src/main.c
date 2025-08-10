@@ -20,8 +20,9 @@ enum {
 
 static void mbr_print(const struct mbr *mbr)
 {
-    int i;
     const struct mbr_part *part;
+    int i;
+    unsigned long c, h, s;
 
     printf("Disk signature: %lx\n", mbr->disk_sig);
 
@@ -36,10 +37,13 @@ static void mbr_print(const struct mbr *mbr)
         printf("Partition #%d:\n", i);
         printf("Boot indicator %d\n", part->boot_ind);
         printf("Type           %d\n", part->type);
-        printf("Start C/H/S    %d/%d/%d\n", part->start_chs[0],
-               part->start_chs[1], part->start_chs[2]);
-        printf("End C/H/S      %d/%d/%d\n", part->end_chs[0],
-               part->end_chs[1], part->end_chs[2]);
+
+        chs_int_to_tuple(part->start_chs, &c, &h, &s);
+        printf("Start C/H/S    %lu/%lu/%lu\n", c, h, s);
+
+        chs_int_to_tuple(part->end_chs, &c, &h, &s);
+        printf("End C/H/S      %lu/%lu/%lu\n", c, h, s);
+
         printf("Start LBA      %ld\n", part->start_lba);
         printf("Sectors        %ld\n\n", part->sz_lba);
     }
@@ -167,23 +171,17 @@ int main(int argc, const char * const *argv)
 
     ctx.mbr.partitions[0].boot_ind = 0x0;
     ctx.mbr.partitions[0].type = 0xAB;
-    ctx.mbr.partitions[0].start_chs[0] = 0x11;
-    ctx.mbr.partitions[0].start_chs[1] = 0x22;
-    ctx.mbr.partitions[0].start_chs[2] = 0x33;
-    ctx.mbr.partitions[0].end_chs[0] = 0x44;
-    ctx.mbr.partitions[0].end_chs[1] = 0x55;
-    ctx.mbr.partitions[0].end_chs[2] = 0x66;
+    ctx.mbr.partitions[0].start_chs = chs_tuple_to_int(666, 11, 22);
+    /* Max CHS for normal MBR (should be (1023, 254, 63))*/
+    ctx.mbr.partitions[0].end_chs = lba_to_chs(&ctx, 0xFFFFFFFF);
     ctx.mbr.partitions[0].start_lba = 0xAABBCCDD;
     ctx.mbr.partitions[0].sz_lba = 0xCCDDEEFF;
 
     ctx.mbr.partitions[1].boot_ind = 0x80;
     ctx.mbr.partitions[1].type = 0xCD;
-    ctx.mbr.partitions[1].start_chs[0] = 0x33;
-    ctx.mbr.partitions[1].start_chs[1] = 0x22;
-    ctx.mbr.partitions[1].start_chs[2] = 0x11;
-    ctx.mbr.partitions[1].end_chs[0] = 0x66;
-    ctx.mbr.partitions[1].end_chs[1] = 0x55;
-    ctx.mbr.partitions[1].end_chs[2] = 0x44;
+    ctx.mbr.partitions[1].start_chs = chs_tuple_to_int(0, 0, 2);
+    /* Max CHS for protective MBR in GPT layout */
+    ctx.mbr.partitions[1].end_chs = chs_tuple_to_int(1023, 255, 63);
     ctx.mbr.partitions[1].start_lba = 0xDDCCBBAA;
     ctx.mbr.partitions[1].sz_lba = 0xFFEEDDCC;
 

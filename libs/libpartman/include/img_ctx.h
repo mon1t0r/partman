@@ -13,11 +13,11 @@ struct img_ctx {
     /* Partition alignment, in bytes */
     unsigned long long align;
 
-    /* Maximum logical number of heads per cylinder */
-    unsigned long hpc;
+    /* Maximum logical number of heads per cylinder (max 255) */
+    unsigned char hpc;
 
-    /* Maximum logical number of sectors per track */
-    unsigned long spt;
+    /* Maximum logical number of sectors per track (max 63) */
+    unsigned char spt;
 
     /* In-memory MBR structure */
     struct mbr mbr;
@@ -38,11 +38,16 @@ lba_to_byte(const struct img_ctx *ctx, unsigned long long lba);
 unsigned long long
 byte_to_lba(const struct img_ctx *ctx, unsigned long long bytes);
 
-void lba_to_chs(const struct img_ctx *ctx, unsigned long long lba,
-                unsigned char chs[3]);
+unsigned long lba_to_chs(const struct img_ctx *ctx, unsigned long long lba);
 
 unsigned long long
 lba_align(const struct img_ctx *ctx, unsigned long long lba);
+
+unsigned long
+chs_tuple_to_int(unsigned long c, unsigned long h, unsigned long s);
+
+void chs_int_to_tuple(unsigned long chs, unsigned long *c, unsigned long *h,
+                      unsigned long *s);
 
 int img_ctx_init(struct img_ctx *ctx, unsigned long long img_sz);
 

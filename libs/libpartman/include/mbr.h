@@ -7,13 +7,13 @@ struct mbr_part {
     unsigned char boot_ind;
 
     /* CHS address of first absolute sector in partition */
-    unsigned char start_chs[3];
+    unsigned long start_chs;
 
     /* Partition type */
     unsigned char type;
 
     /* CHS address of last absolute sector in partition */
-    unsigned char end_chs[3];
+    unsigned long end_chs;
 
     /* LBA of first absolute sector in the partition */
     unsigned long start_lba;

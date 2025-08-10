@@ -11,17 +11,13 @@ static void mbr_part_write(unsigned char *buf, const struct mbr_part *mbr_part)
     write_int8(buf, mbr_part->boot_ind);
 
     /* Start CHS */
-    write_int8(buf + 1, mbr_part->start_chs[0]);
-    write_int8(buf + 2, mbr_part->start_chs[1]);
-    write_int8(buf + 3, mbr_part->start_chs[2]);
+    write_int24(buf + 1, mbr_part->start_chs);
 
     /* Partition type */
     write_int8(buf + 4, mbr_part->type);
 
     /* End CHS */
-    write_int8(buf + 5, mbr_part->end_chs[0]);
-    write_int8(buf + 6, mbr_part->end_chs[1]);
-    write_int8(buf + 7, mbr_part->end_chs[2]);
+    write_int24(buf + 5, mbr_part->end_chs);
 
     /* Start sector LBA */
     write_int32(buf + 8, mbr_part->start_lba);
@@ -36,17 +32,13 @@ static void mbr_part_read(const unsigned char *buf, struct mbr_part *mbr_part)
     mbr_part->boot_ind = read_int8(buf);
 
     /* Start CHS */
-    mbr_part->start_chs[0] = read_int8(buf + 1);
-    mbr_part->start_chs[1] = read_int8(buf + 2);
-    mbr_part->start_chs[2] = read_int8(buf + 3);
+    mbr_part->start_chs = read_int24(buf + 1);
 
     /* Partition type */
     mbr_part->type = read_int8(buf + 4);
 
     /* End CHS */
-    mbr_part->end_chs[0] = read_int8(buf + 5);
-    mbr_part->end_chs[1] = read_int8(buf + 6);
-    mbr_part->end_chs[2] = read_int8(buf + 7);
+    mbr_part->end_chs = read_int24(buf + 5);
 
     /* Start sector LBA */
     mbr_part->start_lba = read_int32(buf + 8);
@@ -105,17 +97,13 @@ void mbr_init_protective(struct mbr *mbr)
     part = &mbr->partitions[0];
 
     part->boot_ind = 0;
-    part->start_chs[0] = 0x00;
-    part->start_chs[1] = 0x02;
-    part->start_chs[2] = 0x00;
+    part->start_chs = 0x000200;
 
     /* GPT Protective MBR */
     part->type = 0xEE;
 
     /* TODO: Replace with actual size */
-    part->end_chs[0] = 0xFF;
-    part->end_chs[1] = 0xFF;
-    part->end_chs[2] = 0xFF;
+    part->end_chs = 0xFFFFFF;
 
     /* TODO: Replace with actual size */
     part->start_lba = 0x01;

@@ -11,6 +11,13 @@ void write_int16(unsigned char *buf, unsigned short i)
     buf[1] = (i >> 8) & 0xFF;
 }
 
+void write_int24(unsigned char *buf, unsigned long i)
+{
+    buf[0] = (i >> 0 ) & 0xFF;
+    buf[1] = (i >> 8 ) & 0xFF;
+    buf[2] = (i >> 16) & 0xFF;
+}
+
 void write_int32(unsigned char *buf, unsigned long i)
 {
     buf[0] = (i >> 0 ) & 0xFF;
@@ -40,6 +47,13 @@ unsigned short read_int16(const unsigned char *buf)
 {
     return ((unsigned short) buf[0] << 0) |
            ((unsigned short) buf[1] << 8);
+}
+
+unsigned long read_int24(const unsigned char *buf)
+{
+    return ((unsigned long) buf[0] << 0)  |
+           ((unsigned long) buf[1] << 8)  |
+           ((unsigned long) buf[2] << 16);
 }
 
 unsigned long read_int32(const unsigned char *buf)

@@ -6,9 +6,9 @@
 #include "img_ctx.h"
 
 unsigned long long
-lba_to_byte(const struct img_ctx *ctx, unsigned long long secs)
+lba_to_byte(const struct img_ctx *ctx, unsigned long long lba)
 {
-    return secs * ctx->sec_sz;
+    return lba * ctx->sec_sz;
 }
 
 unsigned long long
@@ -21,24 +21,29 @@ byte_to_lba(const struct img_ctx *ctx, unsigned long long bytes)
 #endif
 }
 
-void lba_to_chs(const struct img_ctx *ctx, unsigned long long lba,
-                unsigned char chs[3])
+unsigned long lba_to_chs(const struct img_ctx *ctx, unsigned long long lba)
 {
-    /* Cylinders * Heads * Sectors */
-    unsigned long long max_lba = 0xFF * ctx->hpc * ctx->spt;
+    unsigned long long max_lba;
+    unsigned long c, h, s;
+
+    /* Max LBA, which can be converted to CHS */
+    /* Formula used is to convert from CHS to LBA */
+    max_lba = (0x3FF * ctx->hpc + (ctx->hpc-1)) * ctx->spt + (ctx->spt-1);
 
     if(lba > max_lba) {
         lba = max_lba;
     }
 
     /* Cylinders */
-    chs[0] = lba / (ctx->hpc * ctx->spt);
+    c = lba / (ctx->hpc * ctx->spt);
 
     /* Heads */
-    chs[1] = (lba / ctx->spt) % ctx->hpc;
+    h = (lba / ctx->spt) % ctx->hpc;
 
     /* Sectors */
-    chs[2] = (lba % ctx->spt) + 1;
+    s = (lba % ctx->spt) + 1;
+
+    return chs_tuple_to_int(c, h, s);
 }
 
 unsigned long long
@@ -46,6 +51,21 @@ lba_align(const struct img_ctx *ctx, unsigned long long lba)
 {
     /* Next aligned LBA after input LBA */
     return (lba / ctx->align + 1) * ctx->align;
+}
+
+unsigned long
+chs_tuple_to_int(unsigned long c, unsigned long h, unsigned long s)
+{
+    return ((c & 0xFF) << 16) | (((c >> 8) & 0x3) << 14) |
+           ((s & 0x3F) << 8) | (h & 0xFF);
+}
+
+void chs_int_to_tuple(unsigned long chs, unsigned long *c, unsigned long *h,
+                      unsigned long *s)
+{
+    *c = (chs >> 14) & 0x3FF;
+    *s = (chs >> 8) & 0x3F;
+    *h = (chs >> 0) & 0xFF;
 }
 
 int img_ctx_init(struct img_ctx *ctx, unsigned long long img_sz)
