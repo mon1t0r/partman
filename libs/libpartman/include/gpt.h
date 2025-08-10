@@ -44,7 +44,7 @@ struct gpt_hdr {
 };
 
 /* GPT partition entry structure */
-struct gpt_part {
+struct gpt_part_ent {
     /* Partition type GUID */
     struct guid type_guid;
 
@@ -62,6 +62,17 @@ struct gpt_part {
 
     /* Name of the partition, using UCS-2 */
     pu32 name[36];
+};
+
+enum {
+    /* GPT header revision number */
+    gpt_hdr_rev     = 0x00010000,
+
+    /* GPT header size, in bytes */
+    gpt_hdr_sz      = 92,
+
+    /* GPT partition entry size, in bytes */
+    gpt_part_ent_sz = 128
 };
 
 #endif

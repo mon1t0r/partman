@@ -7,44 +7,22 @@ enum {
 
 static void mbr_part_write(pu8 *buf, const struct mbr_part *mbr_part)
 {
-    /* Boot indicator */
-    write_pu8(buf, mbr_part->boot_ind);
-
-    /* Start CHS */
-    write_pu24(buf + 1, mbr_part->start_chs);
-
-    /* Partition type */
-    write_pu8(buf + 4, mbr_part->type);
-
-    /* End CHS */
-    write_pu24(buf + 5, mbr_part->end_chs);
-
-    /* Start sector LBA */
-    write_pu32(buf + 8, mbr_part->start_lba);
-
-    /* Number of sectors */
-    write_pu32(buf + 12, mbr_part->sz_lba);
+    write_pu8 (buf,      mbr_part->boot_ind );
+    write_pu24(buf + 1,  mbr_part->start_chs);
+    write_pu8 (buf + 4,  mbr_part->type     );
+    write_pu24(buf + 5,  mbr_part->end_chs  );
+    write_pu32(buf + 8,  mbr_part->start_lba);
+    write_pu32(buf + 12, mbr_part->sz_lba   );
 }
 
 static void mbr_part_read(const pu8 *buf, struct mbr_part *mbr_part)
 {
-    /* Boot indicator */
-    mbr_part->boot_ind = read_pu8(buf);
-
-    /* Start CHS */
-    mbr_part->start_chs = read_pu24(buf + 1);
-
-    /* Partition type */
-    mbr_part->type = read_pu8(buf + 4);
-
-    /* End CHS */
-    mbr_part->end_chs = read_pu24(buf + 5);
-
-    /* Start sector LBA */
-    mbr_part->start_lba = read_pu32(buf + 8);
-
-    /* Number of sectors */
-    mbr_part->sz_lba = read_pu32(buf + 12);
+    mbr_part->boot_ind  = read_pu8 (buf     );
+    mbr_part->start_chs = read_pu24(buf + 1 );
+    mbr_part->type      = read_pu8 (buf + 4 );
+    mbr_part->end_chs   = read_pu24(buf + 5 );
+    mbr_part->start_lba = read_pu32(buf + 8 );
+    mbr_part->sz_lba    = read_pu32(buf + 12);
 }
 
 void mbr_write(pu8 *buf, const struct mbr *mbr)

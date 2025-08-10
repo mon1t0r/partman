@@ -34,8 +34,8 @@ struct mbr {
 };
 
 enum {
-    /* MBR size, in sectors */
-    mbr_sz_secs = 1
+    /* MBR size, in bytes */
+    mbr_sz = 512
 };
 
 void mbr_write(pu8 *buf, const struct mbr *mbr);

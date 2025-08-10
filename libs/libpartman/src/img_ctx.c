@@ -81,7 +81,7 @@ pres img_ctx_map(struct img_ctx *ctx, int img_fd, pflag map_gpt)
     /* img_fd size here must be greater or equal to ctx->img_sz,
      * otherwise mmap() behavior will be undefined */
 
-    ctx->mbr_reg = mmap(NULL, lba_to_byte(ctx, mbr_sz_secs),
+    ctx->mbr_reg = mmap(NULL, mbr_sz,
                         PROT_READ|PROT_WRITE, MAP_SHARED,
                         img_fd, 0);
     if(ctx->mbr_reg == MAP_FAILED) {
@@ -107,7 +107,7 @@ pres img_ctx_unmap(struct img_ctx *ctx)
 {
     int c;
 
-    c = munmap(ctx->mbr_reg, lba_to_byte(ctx, mbr_sz_secs));
+    c = munmap(ctx->mbr_reg, mbr_sz);
     if(c == -1) {
         perror("munmap()");
         fprintf(stderr, "Failed to unmap image MBR\n");
