@@ -14,4 +14,10 @@ struct guid {
     pu8 node[6];
 };
 
+void guid_create(struct guid *guid);
+
+void guid_write(pu8 *buf, const struct guid *guid);
+
+void guid_read(const pu8 *buf, struct guid *guid);
+
 #endif
