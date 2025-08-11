@@ -34,7 +34,7 @@ struct gpt_hdr {
     pu64 part_table_lba;
 
     /* Number of partition entries in the partition entry array */
-    pu32 part_entry_cnt;
+    pu32 part_table_entry_cnt;
 
     /* Partition entry size, in bytes */
     pu32 part_entry_sz;
@@ -74,5 +74,18 @@ enum {
     /* GPT partition entry size, in bytes */
     gpt_part_ent_sz = 128
 };
+
+void gpt_init(struct gpt_hdr *hdr);
+
+void gpt_hdr_write(pu8 *buf, const struct gpt_hdr *hdr);
+
+void gpt_hdr_read(const pu8 *buf, struct gpt_hdr *hdr);
+
+pflag gpt_is_present(const pu8 *buf);
+
+pflag gpt_is_valid(const struct gpt_hdr *hdr,
+                   const struct gpt_part_ent *table, pu64 hdr_lba);
+
+void gpt_crc_create(struct gpt_hdr *hdr, const struct gpt_part_ent *table);
 
 #endif

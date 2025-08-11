@@ -76,3 +76,18 @@ void guid_read(const pu8 *buf, struct guid *guid)
     }
 }
 
+void guid_crc_compute(pcrc32 *crc32, const struct guid *guid)
+{
+    int i;
+
+    crc32_compute32(crc32, guid->time_lo);
+    crc32_compute16(crc32, guid->time_mid);
+    crc32_compute16(crc32, guid->time_hi_ver);
+    crc32_compute8(crc32, guid->cl_seq_hi_res);
+    crc32_compute8(crc32, guid->cl_seq_lo);
+
+    for(i = 0; i < sizeof(guid->node) / sizeof(guid->node[0]); i++) {
+        crc32_compute8(crc32, guid->node[i]);
+    }
+}
+
