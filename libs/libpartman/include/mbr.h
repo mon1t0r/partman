@@ -33,6 +33,15 @@ struct mbr {
     struct mbr_part partitions[4];
 };
 
+/* MBR partitioning scheme context */
+struct schem_ctx_mbr {
+    /* In-memory MBR structure */
+    struct mbr mbr;
+
+    /* Pointer to a memory region, which maps image MBR region */
+    pu8 *mbr_reg;
+};
+
 enum {
     /* MBR size, in bytes */
     mbr_sz = 512

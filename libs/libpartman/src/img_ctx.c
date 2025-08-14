@@ -1,7 +1,4 @@
-#include <stdio.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/mman.h>
 
 #include "img_ctx.h"
 
@@ -10,13 +7,19 @@ pu64 lba_to_byte(const struct img_ctx *ctx, pu64 lba)
     return lba * ctx->sec_sz;
 }
 
-pu64 byte_to_lba(const struct img_ctx *ctx, pu64 bytes)
+pu64 byte_to_lba(const struct img_ctx *ctx, pu64 bytes, pflag round_up)
 {
 #if 0
     return (bytes + (ctx->sec_sz-1)) / ctx->sec_sz;
 #else
-    return bytes / ctx->sec_sz + (bytes % ctx->sec_sz ? 1 : 0);
+    return bytes / ctx->sec_sz + (round_up && (bytes % ctx->sec_sz) ? 1 : 0);
 #endif
+}
+
+pu64 lba_align(const struct img_ctx *ctx, pu64 lba)
+{
+    /* Next aligned LBA after input LBA */
+    return (lba / ctx->align + 1) * ctx->align;
 }
 
 pu32 lba_to_chs(const struct img_ctx *ctx, pu64 lba)
@@ -42,12 +45,6 @@ pu32 lba_to_chs(const struct img_ctx *ctx, pu64 lba)
     s = (lba % ctx->spt) + 1;
 
     return chs_tuple_to_int(c, h, s);
-}
-
-pu64 lba_align(const struct img_ctx *ctx, pu64 lba)
-{
-    /* Next aligned LBA after input LBA */
-    return (lba / ctx->align + 1) * ctx->align;
 }
 
 pu32 chs_tuple_to_int(pu32 c, pu32 h, pu32 s)
@@ -76,47 +73,3 @@ void img_ctx_init(struct img_ctx *ctx, pu64 img_sz)
     ctx->spt    = 63;          /* 63 sectors per track   */
 }
 
-pres img_ctx_map(struct img_ctx *ctx, int img_fd, pflag map_gpt)
-{
-    /* img_fd size here must be greater or equal to ctx->img_sz,
-     * otherwise mmap() behavior will be undefined */
-
-    ctx->mbr_reg = mmap(NULL, mbr_sz,
-                        PROT_READ|PROT_WRITE, MAP_SHARED,
-                        img_fd, 0);
-    if(ctx->mbr_reg == MAP_FAILED) {
-        perror("mmap()");
-        fprintf(stderr, "Failed to map image MBR\n");
-        return pres_fail;
-    }
-
-    if(!map_gpt) {
-        ctx->gpt_reg_prim = NULL;
-        ctx->gpt_reg_sec = NULL;
-        return pres_succ;
-    }
-
-    /* TODO: Map GPT primary header */
-
-    /* TODO: Map GPT secondary header */
-
-    return pres_succ;
-}
-
-pres img_ctx_unmap(struct img_ctx *ctx)
-{
-    int c;
-
-    c = munmap(ctx->mbr_reg, mbr_sz);
-    if(c == -1) {
-        perror("munmap()");
-        fprintf(stderr, "Failed to unmap image MBR\n");
-        return pres_fail;
-    }
-
-    /* TODO: Unmap GPT primary header */
-
-    /* TODO: Unmap GPT secondary header */
-
-    return pres_succ;
-}

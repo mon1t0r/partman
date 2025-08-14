@@ -1,11 +1,20 @@
+#include <stddef.h>
+#include <stdio.h>
 #include <string.h>
+#include <sys/mman.h>
 
 #include "gpt.h"
 #include "guid.h"
+#include "img_ctx.h"
 #include "memutils.h"
 #include "crc32.h"
 
 #define GPT_SIG "EFI PART"
+
+enum {
+    /* GPT header revision number */
+    gpt_hdr_rev = 0x00010000
+};
 
 static void gpt_part_ent_crc_compute(pcrc32 *crc32,
                                      const struct gpt_part_ent *entry)
@@ -81,6 +90,49 @@ void gpt_init(struct gpt_hdr *hdr)
     hdr->hdr_sz = gpt_hdr_sz;
     guid_create(&hdr->disk_guid);
     hdr->part_entry_sz = gpt_part_ent_sz;
+}
+
+/* TODO: Change */
+static pres gpt_hdr_map(pu8 **reg_ptr, const struct img_ctx *ctx, int img_fd,
+                 pu64 hdr_lba)
+{
+    pu64 off, len;
+
+    /* GPT header length, in bytes.
+     * GPT header can not take up more, than 1 sector */
+    len = lba_to_byte(ctx, 1);
+
+    /* Map GPT header sector */
+    off = lba_to_byte(ctx, hdr_lba);
+    *reg_ptr = mmap(NULL, len, PROT_READ|PROT_WRITE, MAP_SHARED, img_fd, off);
+    if(*reg_ptr == MAP_FAILED) {
+        perror("mmap()");
+        fprintf(stderr, "Failed to map image GPT header at LBA %llu\n",
+                hdr_lba);
+        return pres_fail;
+    }
+
+    return pres_succ;
+}
+
+/* TODO: Map and load */
+
+/* TODO: Map from memory */
+
+/* TODO: Change */
+pres gpt_hdr_unmap(pu8 **reg_ptr, const struct img_ctx *ctx)
+{
+    int c;
+
+    c = munmap(reg_ptr, lba_to_byte(ctx, 1));
+    if(c == -1) {
+        perror("munmap()");
+        fprintf(stderr, "Failed to unmap image GPT header\n");
+        return pres_fail;
+    }
+    reg_ptr = NULL;
+
+    return pres_succ;
 }
 
 void gpt_hdr_write(pu8 *buf, const struct gpt_hdr *hdr)

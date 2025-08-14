@@ -3,6 +3,7 @@
 
 #include "partman_types.h"
 #include "guid.h"
+#include "mbr.h"
 
 /* GUID Partition Table (GPT) header structure */
 struct gpt_hdr {
@@ -64,10 +65,37 @@ struct gpt_part_ent {
     pu32 name[36];
 };
 
-enum {
-    /* GPT header revision number */
-    gpt_hdr_rev     = 0x00010000,
+/* GPT partitioning scheme context */
+struct schem_ctx_gpt {
+    /* Protective MBR partitioning scheme */
+    struct schem_ctx_mbr mbr_prot;
 
+    /* In-memory GPT primary header structure */
+    struct gpt_hdr gpt_hdr_prim;
+
+    /* In-memory GPT primary table structure */
+    struct gpt_part_ent *gpt_table_prim;
+
+    /* In-memory GPT atlernative header structure */
+    struct gpt_hdr gpt_hdr_alt;
+
+    /* In-memory GPT alternative table structure */
+    struct gpt_part_ent *gpt_table_alt;
+
+    /* Pointer to a memory region, which maps image primary GPT header */
+    pu8 *gpt_prim_hdr_reg;
+
+    /* Pointer to a memory region, which maps image primary GPT table */
+    pu8 *gpt_prim_table_reg;
+
+    /* Pointer to a memory region, which maps image atlernative GPT header */
+    pu8 *gpt_alt_hdr_reg;
+
+    /* Pointer to a memory region, which maps image atlernative GPT table */
+    pu8 *gpt_alt_table_reg;
+};
+
+enum {
     /* GPT header size, in bytes */
     gpt_hdr_sz      = 92,
 
