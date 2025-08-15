@@ -189,7 +189,10 @@ int main(int argc, const char * const *argv)
     struct schem_ctx_mbr ctx_mbr;
     struct schem_ctx_gpt ctx_gpt;
     pres r;
+
+#if 1
     enum gpt_load_res gpt_res;
+#endif
 
     printf("partman 1.0\n\n");
 
@@ -210,8 +213,8 @@ int main(int argc, const char * const *argv)
     memset(&ctx_gpt, 0, sizeof(ctx_gpt));
 
     /* Allocate space for GPT tables */
-    ctx_gpt.table_prim = malloc(128 * sizeof(ctx_gpt.table_prim[0]));
-    ctx_gpt.table_sec = malloc(128 * sizeof(ctx_gpt.table_prim[0]));
+    ctx_gpt.table_prim = calloc(128, sizeof(ctx_gpt.table_prim[0]));
+    ctx_gpt.table_sec = calloc(128, sizeof(ctx_gpt.table_prim[0]));
 
     /* Ensure img_fd has required size */
     r = img_ensure_size(img_fd, IMAGE_SIZE);
@@ -258,13 +261,64 @@ int main(int argc, const char * const *argv)
 
     goto exit;
 
-#endif
+#elif 0
+    /* Primary GPT */
+    gpt_init_new(&ctx_gpt.hdr_prim);
+    ctx_gpt.hdr_prim.my_lba = 1;
+    ctx_gpt.hdr_prim.alt_lba = byte_to_lba(&img_ctx, IMAGE_SIZE, 0) - 1;
+    ctx_gpt.hdr_prim.first_usable_lba = 2048;
+    ctx_gpt.hdr_prim.last_usable_lba = 121208798;
+    guid_create(&ctx_gpt.hdr_prim.disk_guid);
+    ctx_gpt.hdr_prim.part_table_lba = 2;
+    ctx_gpt.hdr_prim.part_table_entry_cnt = 1;
+    ctx_gpt.hdr_prim.part_entry_sz = 128;
 
-    gpt_res = gpt_load(&ctx_gpt.hdr_prim, ctx_gpt.table_prim, &img_ctx, 1);
-    if(gpt_res != gpt_load_ok) {
-        fprintf(stderr, "Failed to load primary GPT header %d\n", gpt_res);
+    guid_create(&ctx_gpt.table_prim[0].type_guid);
+    guid_create(&ctx_gpt.table_prim[0].unique_guid);
+    ctx_gpt.table_prim[0].start_lba = 2048;
+    ctx_gpt.table_prim[0].end_lba = 121206783;
+
+    gpt_crc_create(&ctx_gpt.hdr_prim, ctx_gpt.table_prim);
+
+    /* Secondary GPT */
+    gpt_restore(&ctx_gpt.hdr_sec, ctx_gpt.table_sec, &ctx_gpt.hdr_prim, ctx_gpt.table_prim);
+    ctx_gpt.hdr_sec.part_table_lba = ctx_gpt.hdr_sec.my_lba - 32;
+
+    gpt_crc_create(&ctx_gpt.hdr_sec, ctx_gpt.table_sec);
+
+    /* Save GPTs */
+    r = gpt_save(&ctx_gpt.hdr_prim, ctx_gpt.table_prim, &img_ctx);
+    if(!r) {
+        fprintf(stderr, "Failed to write primary GPT\n");
         goto exit;
     }
+
+    r = gpt_save(&ctx_gpt.hdr_sec, ctx_gpt.table_sec, &img_ctx);
+    if(!r) {
+        fprintf(stderr, "Failed to write secondary GPT\n");
+        goto exit;
+    }
+
+    goto exit;
+
+#else
+
+    /* Load GPT primary header */
+    gpt_res = gpt_load(&ctx_gpt.hdr_prim, ctx_gpt.table_prim, &img_ctx, 1);
+    if(gpt_res != gpt_load_ok) {
+        fprintf(stderr, "Failed to load primary GPT %d\n", gpt_res);
+        goto exit;
+    }
+
+    /* Load GPT secondary header */
+    gpt_res = gpt_load(&ctx_gpt.hdr_sec, ctx_gpt.table_sec, &img_ctx,
+                       ctx_gpt.hdr_prim.alt_lba);
+    if(gpt_res != gpt_load_ok) {
+        fprintf(stderr, "Failed to load secondary GPT %d\n", gpt_res);
+        goto exit;
+    }
+
+#endif
 
     /* Start user routine */
     r = user_routine(&ctx_mbr, &ctx_gpt, &img_ctx, img_fd);

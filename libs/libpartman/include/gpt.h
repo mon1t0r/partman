@@ -112,7 +112,8 @@ pflag gpt_table_is_valid(const struct gpt_hdr *hdr,
                          const struct gpt_part_ent table[]);
 
 void gpt_restore(struct gpt_hdr *hdr_dst, struct gpt_part_ent table_dst[],
-                 struct gpt_hdr *hdr_src, struct gpt_part_ent table_src[]);
+                 const struct gpt_hdr *hdr_src,
+                 const struct gpt_part_ent table_src[]);
 
 pflag gpt_is_part_used(const struct gpt_part_ent *part);
 

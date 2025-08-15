@@ -201,6 +201,8 @@ static void gpt_part_ent_read(const pu8 *buf, struct gpt_part_ent *entry)
 
 void gpt_init_new(struct gpt_hdr *hdr)
 {
+    memset(hdr, 0, sizeof(*hdr));
+
     hdr->rev = gpt_hdr_rev;
     hdr->hdr_sz = gpt_hdr_sz;
     guid_create(&hdr->disk_guid);
@@ -305,7 +307,8 @@ pflag gpt_table_is_valid(const struct gpt_hdr *hdr,
 }
 
 void gpt_restore(struct gpt_hdr *hdr_dst, struct gpt_part_ent table_dst[],
-                 struct gpt_hdr *hdr_src, struct gpt_part_ent table_src[])
+                 const struct gpt_hdr *hdr_src,
+                 const struct gpt_part_ent table_src[])
 {
     pu32 i;
 
