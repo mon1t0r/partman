@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <string.h>
 #include <sys/mman.h>
 
@@ -15,26 +16,71 @@ enum {
     gpt_hdr_rev = 0x00010000
 };
 
+static long byte_to_page(pu64 bytes, pflag round_up)
+{
+    long pg_sz = sysconf(_SC_PAGESIZE);
+    return bytes / pg_sz + (round_up && (bytes % pg_sz) ? 1 : 0);
+}
+
+static pu64 page_to_byte(long pages)
+{
+    return pages * sysconf(_SC_PAGESIZE);
+}
+
 static pu8 *map_secs(const struct img_ctx *ctx, int img_fd, pu64 off_lba,
-                     pu64 len_lba)
+                     pu64 secs_cnt)
 {
     pu8 *reg;
+    pu64 off_bytes;
+    long off_pages;
+    long align_off;
+    long len_pages;
 
-    reg = mmap(NULL, lba_to_byte(ctx, len_lba), PROT_READ|PROT_WRITE,
-               MAP_SHARED, img_fd, lba_to_byte(ctx, off_lba));
+    /* Memory region offset, in bytes */
+    off_bytes = lba_to_byte(ctx, off_lba);
+
+    /* Memory region offset, in pages (aligned, to lower) */
+    off_pages = byte_to_page(off_bytes, 0);
+
+    /* Alignment offset, in bytes (how many bytes offset moved back) */
+    align_off = off_bytes - page_to_byte(off_pages);
+
+    /* Memory region length, in pages (aligned, to higher)  */
+    len_pages = byte_to_page(lba_to_byte(ctx, secs_cnt) + align_off, 1);
+
+    reg = mmap(NULL, page_to_byte(len_pages), PROT_READ|PROT_WRITE,
+               MAP_SHARED, img_fd, page_to_byte(off_pages));
     if(reg == MAP_FAILED) {
         perror("mmap()");
         return NULL;
     }
 
-    return reg;
+    /* Return address moved forward with alignment offset */
+    return reg + align_off;
 }
 
-static pres unmap_secs(pu8 *reg, const struct img_ctx *ctx, pu64 len_lba)
+static pres unmap_secs(pu8 *reg, const struct img_ctx *ctx, pu64 off_lba,
+                       pu64 secs_cnt)
 {
     int c;
+    pu64 off_bytes;
+    long off_pages;
+    long align_off;
+    long len_pages;
 
-    c = munmap(reg, lba_to_byte(ctx, len_lba));
+    /* Memory region offset, in bytes */
+    off_bytes = lba_to_byte(ctx, off_lba);
+
+    /* Memory region offset, in pages (aligned, to lower) */
+    off_pages = byte_to_page(off_bytes, 0);
+
+    /* Alignment offset, in bytes (how many bytes offset moved back) */
+    align_off = off_bytes - page_to_byte(off_pages);
+
+    /* Memory region length, in pages (aligned, to higher)  */
+    len_pages = byte_to_page(lba_to_byte(ctx, secs_cnt) + align_off, 1);
+
+    c = munmap(reg - align_off, len_pages);
     if(c == -1) {
         perror("munmap()");
         return pres_fail;
@@ -47,13 +93,21 @@ static pres unmap_secs(pu8 *reg, const struct img_ctx *ctx, pu64 len_lba)
 static void gpt_part_ent_crc_compute(pcrc32 *crc32,
                                      const struct gpt_part_ent *entry)
 {
+    int i;
+
     guid_crc_compute(crc32, &entry->type_guid);
     guid_crc_compute(crc32, &entry->unique_guid);
     crc32_compute64(crc32, entry->start_lba);
     crc32_compute64(crc32, entry->end_lba);
     crc32_compute64(crc32, entry->attr);
 
-    /* TODO: Compute CRC of the partition name */
+    for(i = 0; i < sizeof(entry->name) / sizeof(entry->name[0]); i++) {
+        /* End of string */
+        if(entry->name[i] == 0) {
+            break;
+        }
+        crc32_compute16(crc32, entry->name[i]);
+    }
 }
 
 static pcrc32 gpt_table_crc_create(const struct gpt_part_ent table[],
@@ -114,6 +168,8 @@ static pcrc32 gpt_hdr_crc_create(const struct gpt_hdr *hdr)
 
 static void gpt_part_ent_write(pu8 *buf, const struct gpt_part_ent *entry)
 {
+    int i;
+
     /* Partition type GUID */
     guid_write(buf, &entry->type_guid);
 
@@ -124,11 +180,15 @@ static void gpt_part_ent_write(pu8 *buf, const struct gpt_part_ent *entry)
     write_pu64(buf + 40, entry->end_lba);
     write_pu64(buf + 48, entry->attr);
 
-    /* TODO: Write partition name */
+    for(i = 0; i < sizeof(entry->name) / sizeof(entry->name[0]); i++) {
+        write_pu16(buf + 56 + i, entry->name[i]);
+    }
 }
 
 static void gpt_part_ent_read(const pu8 *buf, struct gpt_part_ent *entry)
 {
+    int i;
+
     /* Partition type GUID */
     guid_read(buf, &entry->type_guid);
 
@@ -139,7 +199,9 @@ static void gpt_part_ent_read(const pu8 *buf, struct gpt_part_ent *entry)
     entry->end_lba = read_pu64(buf + 40);
     entry->attr = read_pu64(buf + 48);
 
-    /* TODO: Read partition name */
+    for(i = 0; i < sizeof(entry->name) / sizeof(entry->name[0]); i++) {
+        entry->name[i] = read_pu16(buf + 56 + i);
+    }
 }
 
 void gpt_init_new(struct gpt_hdr *hdr)
@@ -332,7 +394,7 @@ enum gpt_load_res gpt_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],
 exit:
     /* If mapped, unmap GPT header sector */
     if(hdr_reg) {
-        res = unmap_secs(hdr_reg, img_ctx, hdr_sz_secs);
+        res = unmap_secs(hdr_reg, img_ctx, hdr_lba, hdr_sz_secs);
         if(!res) {
             fprintf(stderr, "Failed to unmap image GPT header at LBA "
                     "%llu\n", hdr_lba);
@@ -342,7 +404,7 @@ exit:
 
     /* If mapped, unmap GPT table sectors */
     if(table_reg) {
-        res = unmap_secs(table_reg, img_ctx, table_sz_secs);
+        res = unmap_secs(table_reg, img_ctx, table_lba, table_sz_secs);
         if(!res) {
             fprintf(stderr, "Failed to unmap image GPT table at LBA "
                     "%llu\n", table_lba);
@@ -405,7 +467,7 @@ pres gpt_save(const struct gpt_hdr *hdr, const struct gpt_part_ent table[],
 exit:
     /* If mapped, unmap GPT header sector */
     if(hdr_reg) {
-        res = unmap_secs(hdr_reg, img_ctx, hdr_sz_secs);
+        res = unmap_secs(hdr_reg, img_ctx, hdr_lba, hdr_sz_secs);
         if(!res) {
             fprintf(stderr, "Failed to unmap image GPT header at LBA "
                     "%llu\n", hdr_lba);
@@ -415,7 +477,7 @@ exit:
 
     /* If mapped, unmap GPT table sectors */
     if(table_reg) {
-        res = unmap_secs(table_reg, img_ctx, table_sz_secs);
+        res = unmap_secs(table_reg, img_ctx, table_lba, table_sz_secs);
         if(!res) {
             fprintf(stderr, "Failed to unmap image GPT table at LBA "
                     "%llu\n", table_lba);
