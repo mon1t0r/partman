@@ -5,8 +5,6 @@
 
 typedef pu32 pcrc32;
 
-void crc32_init_table(void);
-
 pcrc32 crc32_init(void);
 
 void crc32_compute8(pcrc32 *crc32, pu8 i);

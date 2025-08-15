@@ -6,7 +6,7 @@
 /* Initialized to 0s */
 static pcrc32 crc_table[256];
 
-void crc32_init_table(void)
+static void crc32_init_table(void)
 {
     unsigned int i, j;
     pcrc32 crc32;
@@ -35,6 +35,10 @@ void crc32_finalize(pcrc32 *crc32)
 
 void crc32_compute8(pcrc32 *crc32, pu8 i)
 {
+    if(crc_table[0] == 0) {
+        crc32_init_table();
+    }
+
     *crc32 ^= i;
     *crc32 = (*crc32 >> 8) ^ crc_table[*crc32 & 0xFF];
 }

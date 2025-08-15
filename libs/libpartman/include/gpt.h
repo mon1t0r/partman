@@ -3,6 +3,7 @@
 
 #include "partman_types.h"
 #include "guid.h"
+#include "crc32.h"
 #include "mbr.h"
 
 /* GUID Partition Table (GPT) header structure */
@@ -14,25 +15,25 @@ struct gpt_hdr {
     pu32 hdr_sz;
 
     /* Header CRC32 checksum */
-    pu32 hdr_crc32;
+    pcrc32 hdr_crc32;
 
     /* LBA of the primary header */
-    pu64 my_lba;
+    plba my_lba;
 
     /* LBA of the alternate header */
-    pu64 alt_lba;
+    plba alt_lba;
 
     /* LBA of the first sector, which can be used by a partition */
-    pu64 first_usable_lba;
+    plba first_usable_lba;
 
     /* LBA of the last sector, which can be used by a partition */
-    pu64 last_usable_lba;
+    plba last_usable_lba;
 
     /* Disk GUID */
     struct guid disk_guid;
 
     /* LBA of the partition entry array */
-    pu64 part_table_lba;
+    plba part_table_lba;
 
     /* Number of partition entries in the partition entry array */
     pu32 part_table_entry_cnt;
@@ -41,7 +42,7 @@ struct gpt_hdr {
     pu32 part_entry_sz;
 
     /* Partition entry array CRC32 checksum */
-    pu32 part_table_crc32;
+    pcrc32 part_table_crc32;
 };
 
 /* GPT partition entry structure */
@@ -53,16 +54,16 @@ struct gpt_part_ent {
     struct guid unique_guid;
 
     /* LBA of the first sector, used by a partition */
-    pu64 start_lba;
+    plba start_lba;
 
     /* LBA of the last sector, used by a partition */
-    pu64 end_lba;
+    plba end_lba;
 
     /* Attributes bit field */
     pu64 attr;
 
     /* Name of the partition, using UCS-2 */
-    pu32 name[36];
+    pchar_ucs name[36];
 };
 
 /* GPT partitioning scheme context */
@@ -105,7 +106,7 @@ void gpt_crc_create(struct gpt_hdr *hdr, const struct gpt_part_ent table[]);
 
 pflag gpt_is_present(const pu8 *buf);
 
-pflag gpt_hdr_is_valid(const struct gpt_hdr *hdr, pu64 hdr_lba);
+pflag gpt_hdr_is_valid(const struct gpt_hdr *hdr, plba hdr_lba);
 
 pflag gpt_table_is_valid(const struct gpt_hdr *hdr,
                          const struct gpt_part_ent table[]);
@@ -116,9 +117,8 @@ void gpt_restore(struct gpt_hdr *hdr_dst, struct gpt_part_ent table_dst[],
 pflag gpt_is_part_used(const struct gpt_part_ent *part);
 
 enum gpt_load_res gpt_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],
-                           const struct img_ctx *img_ctx, int img_fd,
-                           pu64 hdr_lba);
+                           const struct img_ctx *img_ctx, plba hdr_lba);
 
 pres gpt_save(const struct gpt_hdr *hdr, const struct gpt_part_ent table[],
-              const struct img_ctx *img_ctx, int img_fd);
+              const struct img_ctx *img_ctx);
 #endif

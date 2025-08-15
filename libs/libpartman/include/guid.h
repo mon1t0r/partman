@@ -24,4 +24,6 @@ void guid_crc_compute(pcrc32 *crc32, const struct guid *guid);
 
 pflag guid_is_zero(const struct guid *guid);
 
+void guid_to_str(char *buf, const struct guid *guid);
+
 #endif

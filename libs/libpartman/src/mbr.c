@@ -70,8 +70,7 @@ pflag mbr_is_part_used(const struct mbr_part *part)
     return part->type != 0 && part->sz_lba != 0;
 }
 
-pres mbr_map(struct schem_ctx_mbr *schem_ctx, const struct img_ctx *img_ctx,
-             int img_fd)
+pres mbr_map(struct schem_ctx_mbr *schem_ctx, const struct img_ctx *img_ctx)
 {
     pu64 len;
 
@@ -81,14 +80,14 @@ pres mbr_map(struct schem_ctx_mbr *schem_ctx, const struct img_ctx *img_ctx,
 
     /* Map sector(s), containing MBR, located at offset 0 */
     schem_ctx->mbr_reg = mmap(NULL, len, PROT_READ|PROT_WRITE, MAP_SHARED,
-                              img_fd, 0);
+                              img_ctx->img_fd, 0);
     if(schem_ctx->mbr_reg == MAP_FAILED) {
         perror("mmap()");
         fprintf(stderr, "Failed to map image MBR\n");
         return pres_fail;
     }
 
-    return pres_succ;
+    return pres_ok;
 }
 
 pres mbr_unmap(struct schem_ctx_mbr *schem_ctx, const struct img_ctx *img_ctx)
@@ -107,7 +106,7 @@ pres mbr_unmap(struct schem_ctx_mbr *schem_ctx, const struct img_ctx *img_ctx)
     }
     schem_ctx->mbr_reg = NULL;
 
-    return pres_succ;
+    return pres_ok;
 }
 
 void mbr_load(struct schem_ctx_mbr *schem_ctx)

@@ -11,7 +11,6 @@
 #include "img_ctx.h"
 #include "mbr.h"
 #include "gpt.h"
-#include "crc32.h"
 #include "guid.h"
 
 /* Used image size, in bytes. Will be configurable in future */
@@ -21,17 +20,6 @@ enum {
     /* Input buffer size, in bytes */
     input_buf_sz = 256
 };
-
-/* TODO: Move to library */
-static void guid_to_str(char *buf, const struct guid *guid)
-{
-    /* Registry format GUID string representation */
-
-    sprintf(buf, "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X",
-            (unsigned int) guid->time_lo, guid->time_mid, guid->time_hi_ver,
-            guid->cl_seq_hi_res, guid->cl_seq_lo, guid->node[0], guid->node[1],
-            guid->node[2], guid->node[3], guid->node[4], guid->node[5]);
-}
 
 static void mbr_print(const struct mbr *mbr)
 {
@@ -131,7 +119,7 @@ static pres action_handle(struct schem_ctx_mbr *ctx_mbr,
             break;
     }
 
-    return pres_succ;
+    return pres_ok;
 }
 
 static pres user_routine(struct schem_ctx_mbr *ctx_mbr,
@@ -151,7 +139,7 @@ static pres user_routine(struct schem_ctx_mbr *ctx_mbr,
 
         /* Character + '\n' */
         if(s == NULL || strlen(s) != 2) {
-            return pres_succ;
+            return pres_ok;
         }
 
         r = action_handle(ctx_mbr, ctx_gpt, img_ctx, img_fd, s[0]);
@@ -174,7 +162,7 @@ static pres img_ensure_size(int img_fd, pu64 img_sz)
 
     /* If image already has required size, return */
     if(s >= img_sz) {
-        return pres_succ;
+        return pres_ok;
     }
 
     /* Seek and write a single byte to ensure image size */
@@ -191,7 +179,7 @@ static pres img_ensure_size(int img_fd, pu64 img_sz)
         return pres_fail;
     }
 
-    return pres_succ;
+    return pres_ok;
 }
 
 int main(int argc, const char * const *argv)
@@ -210,8 +198,6 @@ int main(int argc, const char * const *argv)
         fprintf(stderr, "Usage: %s [FILE]\n", argv[0]);
         return EXIT_FAILURE;
     }
-
-    crc32_init_table();
 
     /* Open file */
     img_fd = open(argv[1], O_RDWR|O_CREAT, 0666);
@@ -235,10 +221,10 @@ int main(int argc, const char * const *argv)
     }
 
     /* Initialize context */
-    img_ctx_init(&img_ctx, IMAGE_SIZE);
+    img_ctx_init(&img_ctx, img_fd, IMAGE_SIZE);
 
     /* Map MBR */
-    r = mbr_map(&ctx_mbr, &img_ctx, img_fd);
+    r = mbr_map(&ctx_mbr, &img_ctx);
     if(!r) {
         goto exit;
     }
@@ -274,8 +260,7 @@ int main(int argc, const char * const *argv)
 
 #endif
 
-    gpt_res = gpt_load(&ctx_gpt.hdr_prim, ctx_gpt.table_prim, &img_ctx,
-                       img_fd, 1);
+    gpt_res = gpt_load(&ctx_gpt.hdr_prim, ctx_gpt.table_prim, &img_ctx, 1);
     if(gpt_res != gpt_load_ok) {
         fprintf(stderr, "Failed to load primary GPT header %d\n", gpt_res);
         goto exit;
@@ -288,7 +273,7 @@ int main(int argc, const char * const *argv)
     }
 
     /* No error branch */
-    r = pres_succ;
+    r = pres_ok;
 
 exit:
     mbr_unmap(&ctx_mbr, &img_ctx);

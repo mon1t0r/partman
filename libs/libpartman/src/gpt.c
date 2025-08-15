@@ -8,6 +8,7 @@
 #include "img_ctx.h"
 #include "memutils.h"
 #include "crc32.h"
+#include "partman_types.h"
 
 #define GPT_SIG "EFI PART"
 
@@ -27,8 +28,7 @@ static pu64 page_to_byte(long pages)
     return pages * sysconf(_SC_PAGESIZE);
 }
 
-static pu8 *map_secs(const struct img_ctx *ctx, int img_fd, pu64 off_lba,
-                     pu64 secs_cnt)
+static pu8 *map_secs(const struct img_ctx *ctx, plba off_lba, plba secs_cnt)
 {
     pu8 *reg;
     pu64 off_bytes;
@@ -49,7 +49,7 @@ static pu8 *map_secs(const struct img_ctx *ctx, int img_fd, pu64 off_lba,
     len_pages = byte_to_page(lba_to_byte(ctx, secs_cnt) + align_off, 1);
 
     reg = mmap(NULL, page_to_byte(len_pages), PROT_READ|PROT_WRITE,
-               MAP_SHARED, img_fd, page_to_byte(off_pages));
+               MAP_SHARED, ctx->img_fd, page_to_byte(off_pages));
     if(reg == MAP_FAILED) {
         perror("mmap()");
         return NULL;
@@ -59,8 +59,8 @@ static pu8 *map_secs(const struct img_ctx *ctx, int img_fd, pu64 off_lba,
     return reg + align_off;
 }
 
-static pres unmap_secs(pu8 *reg, const struct img_ctx *ctx, pu64 off_lba,
-                       pu64 secs_cnt)
+static pres unmap_secs(pu8 *reg, const struct img_ctx *ctx, plba off_lba,
+                       plba secs_cnt)
 {
     int c;
     pu64 off_bytes;
@@ -85,9 +85,8 @@ static pres unmap_secs(pu8 *reg, const struct img_ctx *ctx, pu64 off_lba,
         perror("munmap()");
         return pres_fail;
     }
-    reg = NULL;
 
-    return pres_succ;
+    return pres_ok;
 }
 
 static void gpt_part_ent_crc_compute(pcrc32 *crc32,
@@ -101,7 +100,7 @@ static void gpt_part_ent_crc_compute(pcrc32 *crc32,
     crc32_compute64(crc32, entry->end_lba);
     crc32_compute64(crc32, entry->attr);
 
-    for(i = 0; i < sizeof(entry->name) / sizeof(entry->name[0]); i++) {
+    for(i = 0; i < ARRAY_SIZE(entry->name); i++) {
         crc32_compute16(crc32, entry->name[i]);
     }
 }
@@ -131,7 +130,7 @@ static pcrc32 gpt_hdr_crc_create(const struct gpt_hdr *hdr)
     crc32 = crc32_init();
 
     /* Signature */
-    for(i = 0; i < sizeof(GPT_SIG) / sizeof(GPT_SIG[0]) - 1 ; i++) {
+    for(i = 0; i < ARRAY_SIZE(GPT_SIG) - 1 ; i++) {
         crc32_compute8(&crc32, GPT_SIG[i]);
     }
 
@@ -176,7 +175,7 @@ static void gpt_part_ent_write(pu8 *buf, const struct gpt_part_ent *entry)
     write_pu64(buf + 40, entry->end_lba);
     write_pu64(buf + 48, entry->attr);
 
-    for(i = 0; i < sizeof(entry->name) / sizeof(entry->name[0]); i++) {
+    for(i = 0; i < ARRAY_SIZE(entry->name); i++) {
         write_pu16(buf + 56 + i, entry->name[i]);
     }
 }
@@ -195,7 +194,7 @@ static void gpt_part_ent_read(const pu8 *buf, struct gpt_part_ent *entry)
     entry->end_lba = read_pu64(buf + 40);
     entry->attr = read_pu64(buf + 48);
 
-    for(i = 0; i < sizeof(entry->name) / sizeof(entry->name[0]); i++) {
+    for(i = 0; i < ARRAY_SIZE(entry->name); i++) {
         entry->name[i] = read_pu16(buf + 56 + i);
     }
 }
@@ -213,7 +212,7 @@ void gpt_hdr_write(pu8 *buf, const struct gpt_hdr *hdr)
     int i;
 
     /* Signature */
-    for(i = 0; i < sizeof(GPT_SIG) / sizeof(GPT_SIG[0]) - 1 ; i++) {
+    for(i = 0; i < ARRAY_SIZE(GPT_SIG) - 1 ; i++) {
         write_pu8(buf + i, GPT_SIG[i]);
     }
 
@@ -289,11 +288,10 @@ void gpt_crc_create(struct gpt_hdr *hdr, const struct gpt_part_ent table[])
 
 pflag gpt_is_present(const pu8 *buf)
 {
-    return 0 == strncmp((const char *) buf, GPT_SIG,
-                        sizeof(GPT_SIG) / sizeof(GPT_SIG[0]) - 1);
+    return 0 == strncmp((const char *) buf, GPT_SIG, ARRAY_SIZE(GPT_SIG) - 1);
 }
 
-pflag gpt_hdr_is_valid(const struct gpt_hdr *hdr, pu64 hdr_lba)
+pflag gpt_hdr_is_valid(const struct gpt_hdr *hdr, plba hdr_lba)
 {
     return hdr->hdr_crc32 == gpt_hdr_crc_create(hdr) &&
            hdr->my_lba == hdr_lba;
@@ -327,22 +325,21 @@ pflag gpt_is_part_used(const struct gpt_part_ent *part)
 }
 
 enum gpt_load_res gpt_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],
-                           const struct img_ctx *img_ctx, int img_fd,
-                           pu64 hdr_lba)
+                           const struct img_ctx *img_ctx, plba hdr_lba)
 {
     enum gpt_load_res load_res;
     pres res;
     pu8 *hdr_reg = NULL;
     pu8 *table_reg = NULL;
-    pu64 hdr_sz_secs;
-    pu64 table_sz_secs;
-    pu64 table_lba;
+    plba hdr_sz_secs;
+    plba table_sz_secs;
+    plba table_lba;
 
     /* GPT header size */
     hdr_sz_secs = 1;
 
     /* Map GPT header sector */
-    hdr_reg = map_secs(img_ctx, img_fd, hdr_lba, hdr_sz_secs);
+    hdr_reg = map_secs(img_ctx, hdr_lba, hdr_sz_secs);
     if(hdr_reg == NULL) {
         fprintf(stderr, "Failed to map image GPT header at LBA %llu\n",
                 hdr_lba);
@@ -371,7 +368,7 @@ enum gpt_load_res gpt_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],
                                 hdr->part_entry_sz, 1);
 
     /* Map GPT table sectors */
-    table_reg = map_secs(img_ctx, img_fd, table_lba, table_sz_secs);
+    table_reg = map_secs(img_ctx, table_lba, table_sz_secs);
     if(table_reg == NULL) {
         fprintf(stderr, "Failed to map image GPT table at LBA %llu\n",
                 table_lba);
@@ -417,23 +414,23 @@ exit:
 }
 
 pres gpt_save(const struct gpt_hdr *hdr, const struct gpt_part_ent table[],
-              const struct img_ctx *img_ctx, int img_fd)
+              const struct img_ctx *img_ctx)
 {
     pres save_res;
     pres res;
     pu8 *hdr_reg = NULL;
     pu8 *table_reg = NULL;
-    pu64 hdr_sz_secs;
-    pu64 table_sz_secs;
-    pu64 hdr_lba;
-    pu64 table_lba;
+    plba hdr_sz_secs;
+    plba table_sz_secs;
+    plba hdr_lba;
+    plba table_lba;
 
     /* Get GPT header LBA and size */
     hdr_lba = hdr->my_lba;
     hdr_sz_secs = 1;
 
     /* Map GPT header sector */
-    hdr_reg = map_secs(img_ctx, img_fd, hdr_lba, hdr_sz_secs);
+    hdr_reg = map_secs(img_ctx, hdr_lba, hdr_sz_secs);
     if(hdr_reg == NULL) {
         fprintf(stderr, "Failed to map image GPT header at LBA %llu\n",
                 hdr_lba);
@@ -450,7 +447,7 @@ pres gpt_save(const struct gpt_hdr *hdr, const struct gpt_part_ent table[],
                                 hdr->part_entry_sz, 1);
 
     /* Map GPT table sectors */
-    table_reg = map_secs(img_ctx, img_fd, table_lba, table_sz_secs);
+    table_reg = map_secs(img_ctx, table_lba, table_sz_secs);
     if(table_reg == NULL) {
         fprintf(stderr, "Failed to map image GPT table at LBA %llu\n",
                 table_lba);
@@ -463,7 +460,7 @@ pres gpt_save(const struct gpt_hdr *hdr, const struct gpt_part_ent table[],
                     hdr->part_entry_sz);
 
     /* Saved successfully */
-    save_res = pres_succ;
+    save_res = pres_ok;
 
 exit:
     /* If mapped, unmap GPT header sector */

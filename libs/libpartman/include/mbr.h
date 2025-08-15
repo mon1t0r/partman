@@ -10,19 +10,19 @@ struct mbr_part {
     pu8 boot_ind;
 
     /* CHS address of first absolute sector in partition */
-    pu32 start_chs;
+    pchs start_chs;
 
     /* Partition type */
     pu8 type;
 
     /* CHS address of last absolute sector in partition */
-    pu32 end_chs;
+    pchs end_chs;
 
     /* LBA of first absolute sector in the partition */
-    pu32 start_lba;
+    plba_mbr start_lba;
 
     /* Number of sectors in partition */
-    pu32 sz_lba;
+    plba_mbr sz_lba;
 };
 
 /* Master Boot Record (MBR) structure */
@@ -56,8 +56,7 @@ pflag mbr_is_present(const pu8 *buf);
 
 pflag mbr_is_part_used(const struct mbr_part *part);
 
-pres mbr_map(struct schem_ctx_mbr *schem_ctx, const struct img_ctx *img_ctx,
-             int img_fd);
+pres mbr_map(struct schem_ctx_mbr *schem_ctx, const struct img_ctx *img_ctx);
 
 pres mbr_unmap(struct schem_ctx_mbr *schem_ctx, const struct img_ctx *img_ctx);
 

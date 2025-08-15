@@ -4,6 +4,9 @@
 #include "partman_types.h"
 
 struct img_ctx {
+    /* Image file descriptor */
+    int img_fd;
+
     /* Logical sector (block) size, in bytes */
     pu64 sec_sz;
 
@@ -20,18 +23,18 @@ struct img_ctx {
     pu8 spt;
 };
 
-pu64 lba_to_byte(const struct img_ctx *ctx, pu64 lba);
+pu64 lba_to_byte(const struct img_ctx *ctx, plba lba);
 
-pu64 byte_to_lba(const struct img_ctx *ctx, pu64 bytes, pflag round_up);
+plba byte_to_lba(const struct img_ctx *ctx, pu64 bytes, pflag round_up);
 
-pu64 lba_align(const struct img_ctx *ctx, pu64 lba);
+plba lba_align(const struct img_ctx *ctx, plba lba);
 
-pu32 lba_to_chs(const struct img_ctx *ctx, pu64 lba);
+pchs lba_to_chs(const struct img_ctx *ctx, plba lba);
 
-pu32 chs_tuple_to_int(pu32 c, pu32 h, pu32 s);
+pchs chs_tuple_to_int(pchs c, pchs h, pchs s);
 
-void chs_int_to_tuple(pu32 chs, pu32 *c, pu32 *h, pu32 *s);
+void chs_int_to_tuple(pchs chs, pchs *c, pchs *h, pchs *s);
 
-void img_ctx_init(struct img_ctx *ctx, pu64 img_sz);
+void img_ctx_init(struct img_ctx *ctx, int img_fd, pu64 img_sz);
 
 #endif
