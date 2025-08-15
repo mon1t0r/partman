@@ -102,10 +102,6 @@ static void gpt_part_ent_crc_compute(pcrc32 *crc32,
     crc32_compute64(crc32, entry->attr);
 
     for(i = 0; i < sizeof(entry->name) / sizeof(entry->name[0]); i++) {
-        /* End of string */
-        if(entry->name[i] == 0) {
-            break;
-        }
         crc32_compute16(crc32, entry->name[i]);
     }
 }
@@ -323,6 +319,11 @@ void gpt_restore(struct gpt_hdr *hdr_dst, struct gpt_part_ent table_dst[],
     for(i = 0; i < hdr_src->part_table_entry_cnt; i++) {
         memcpy(&table_dst[i], &table_src[i], sizeof(table_src[i]));
     }
+}
+
+pflag gpt_is_part_used(const struct gpt_part_ent *part)
+{
+    return !guid_is_zero(&part->type_guid);
 }
 
 enum gpt_load_res gpt_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],

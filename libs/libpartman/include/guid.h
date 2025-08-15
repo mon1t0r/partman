@@ -6,7 +6,6 @@
 
 /* Globally Unique Identifier (GUID) structure */
 struct guid {
-
     pu32 time_lo;
     pu16 time_mid;
     pu16 time_hi_ver;
@@ -22,5 +21,7 @@ void guid_write(pu8 *buf, const struct guid *guid);
 void guid_read(const pu8 *buf, struct guid *guid);
 
 void guid_crc_compute(pcrc32 *crc32, const struct guid *guid);
+
+pflag guid_is_zero(const struct guid *guid);
 
 #endif

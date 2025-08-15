@@ -91,3 +91,18 @@ void guid_crc_compute(pcrc32 *crc32, const struct guid *guid)
     }
 }
 
+pflag guid_is_zero(const struct guid *guid)
+{
+    int i;
+    pu32 flag;
+
+    flag = guid->time_lo | guid->time_mid | guid->time_hi_ver |
+           guid->cl_seq_hi_res | guid->cl_seq_lo;
+
+    for(i = 0; i < sizeof(guid->node) / sizeof(guid->node[0]); i++) {
+        flag |= guid->node[i];
+    }
+
+    return flag ? 0 : 1;
+}
+

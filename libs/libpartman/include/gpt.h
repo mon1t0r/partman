@@ -113,6 +113,8 @@ pflag gpt_table_is_valid(const struct gpt_hdr *hdr,
 void gpt_restore(struct gpt_hdr *hdr_dst, struct gpt_part_ent table_dst[],
                  struct gpt_hdr *hdr_src, struct gpt_part_ent table_src[]);
 
+pflag gpt_is_part_used(const struct gpt_part_ent *part);
+
 enum gpt_load_res gpt_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],
                            const struct img_ctx *img_ctx, int img_fd,
                            pu64 hdr_lba);

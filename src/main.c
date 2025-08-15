@@ -9,22 +9,39 @@
 
 #include "partman_types.h"
 #include "img_ctx.h"
+#include "mbr.h"
+#include "gpt.h"
+#include "crc32.h"
+#include "guid.h"
+
+/* Used image size, in bytes. Will be configurable in future */
+#define IMAGE_SIZE 62058921984
 
 enum {
     /* Input buffer size, in bytes */
-    input_buf_sz = 256,
-
-    /* Used image size, in bytes. Will be configurable in future */
-    used_image_size = 2048
+    input_buf_sz = 256
 };
+
+/* TODO: Move to library */
+static void guid_to_str(char *buf, const struct guid *guid)
+{
+    /* Registry format GUID string representation */
+
+    sprintf(buf, "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X",
+            (unsigned int) guid->time_lo, guid->time_mid, guid->time_hi_ver,
+            guid->cl_seq_hi_res, guid->cl_seq_lo, guid->node[0], guid->node[1],
+            guid->node[2], guid->node[3], guid->node[4], guid->node[5]);
+}
 
 static void mbr_print(const struct mbr *mbr)
 {
-    const struct mbr_part *part;
     int i;
+    const struct mbr_part *part;
     pu32 c, h, s;
 
-    printf("Disk signature: %lx\n", mbr->disk_sig);
+    printf("\n===MBR info ===\n");
+
+    printf("Disk signature: %lx\n\n", mbr->disk_sig);
 
     for(i = 0; i < sizeof(mbr->partitions) / sizeof(mbr->partitions[0]); i++) {
         part = &mbr->partitions[i];
@@ -49,7 +66,57 @@ static void mbr_print(const struct mbr *mbr)
     }
 }
 
-static pres action_handle(struct img_ctx *ctx, int img_fd, int sym)
+static void gpt_print(const struct gpt_hdr *hdr,
+                      const struct gpt_part_ent table[])
+{
+    char buf[50];
+    int i;
+    const struct gpt_part_ent *part;
+
+    printf("\n===GPT info ===\n");
+
+    printf("Revision:                    %lx\n", hdr->rev);
+    printf("Header size:                 %lu\n", hdr->hdr_sz);
+    printf("Header CRC32:                %lu\n", hdr->hdr_crc32);
+    printf("My LBA:                      %llu\n", hdr->my_lba);
+    printf("Alt LBA:                     %llu\n", hdr->alt_lba);
+    printf("First usable LBA:            %llu\n", hdr->first_usable_lba);
+    printf("Last usable LBA:             %llu\n", hdr->last_usable_lba);
+
+    guid_to_str(buf, &hdr->disk_guid);
+    printf("Disk GUID:                   %s\n", buf);
+
+    printf("Partition table LBA:         %llu\n", hdr->part_table_lba);
+    printf("Partition table entry count: %lu\n", hdr->part_table_entry_cnt);
+    printf("Partition entry size:        %lu\n", hdr->part_entry_sz);
+    printf("Partition table CRC32:       %lu\n\n", hdr->part_table_crc32);
+
+
+    for(i = 0; i < hdr->part_table_entry_cnt; i++) {
+        part = &table[i];
+
+        /* Empty partition */
+        if(!gpt_is_part_used(part)) {
+            continue;
+        }
+
+        guid_to_str(buf, &part->unique_guid);
+        printf("Partition %s:\n", buf);
+
+        guid_to_str(buf, &part->type_guid);
+        printf("Type %s\n", buf);
+
+        printf("Start LBA: %llu\n", part->start_lba);
+        printf("End LBA: %llu\n", part->end_lba);
+        printf("Attributes: %llu\n\n", part->attr);
+
+        /* TODO: Print partition name */
+    }
+}
+
+static pres action_handle(struct schem_ctx_mbr *ctx_mbr,
+                          struct schem_ctx_gpt *ctx_gpt,
+                          const struct img_ctx *img_ctx, int img_fd, int sym)
 {
     switch(sym) {
         /* Help */
@@ -59,14 +126,17 @@ static pres action_handle(struct img_ctx *ctx, int img_fd, int sym)
 
         /* Print the partition table */
         case 'p':
-            mbr_print(&ctx->mbr);
+            mbr_print(&ctx_mbr->mbr);
+            gpt_print(&ctx_gpt->hdr_prim, ctx_gpt->table_prim);
             break;
     }
 
     return pres_succ;
 }
 
-static pres user_routine(struct img_ctx *ctx, int img_fd)
+static pres user_routine(struct schem_ctx_mbr *ctx_mbr,
+                         struct schem_ctx_gpt *ctx_gpt,
+                         const struct img_ctx *img_ctx, int img_fd)
 {
     char buf[input_buf_sz];
     char *s;
@@ -84,7 +154,7 @@ static pres user_routine(struct img_ctx *ctx, int img_fd)
             return pres_succ;
         }
 
-        r = action_handle(ctx, img_fd, s[0]);
+        r = action_handle(ctx_mbr, ctx_gpt, img_ctx, img_fd, s[0]);
         if(!r) {
             return pres_fail;
         }
@@ -127,14 +197,21 @@ static pres img_ensure_size(int img_fd, pu64 img_sz)
 int main(int argc, const char * const *argv)
 {
     int img_fd;
-    struct img_ctx ctx;
+    struct img_ctx img_ctx;
+    struct schem_ctx_mbr ctx_mbr;
+    struct schem_ctx_gpt ctx_gpt;
     pres r;
+    enum gpt_load_res gpt_res;
+
+    printf("partman 1.0\n\n");
 
     /* Image file not specified */
     if(argc < 2) {
         fprintf(stderr, "Usage: %s [FILE]\n", argv[0]);
         return EXIT_FAILURE;
     }
+
+    crc32_init_table();
 
     /* Open file */
     img_fd = open(argv[1], O_RDWR|O_CREAT, 0666);
@@ -144,58 +221,68 @@ int main(int argc, const char * const *argv)
         return EXIT_FAILURE;
     }
 
+    memset(&ctx_gpt, 0, sizeof(ctx_gpt));
+
+    /* Allocate space for GPT tables */
+    ctx_gpt.table_prim = malloc(128 * sizeof(ctx_gpt.table_prim[0]));
+    ctx_gpt.table_sec = malloc(128 * sizeof(ctx_gpt.table_prim[0]));
+
     /* Ensure img_fd has required size */
-    r = img_ensure_size(img_fd, used_image_size);
+    r = img_ensure_size(img_fd, IMAGE_SIZE);
     if(!r) {
         fprintf(stderr, "Unable to ensure image size\n");
         goto exit;
     }
 
     /* Initialize context */
-    img_ctx_init(&ctx, used_image_size);
+    img_ctx_init(&img_ctx, IMAGE_SIZE);
 
-    /* Map image parts to memory */
-    r = img_ctx_map(&ctx, img_fd, 0);
+    /* Map MBR */
+    r = mbr_map(&ctx_mbr, &img_ctx, img_fd);
     if(!r) {
-        fprintf(stderr, "Faild to map image to memory\n");
         goto exit;
     }
 
-    printf("partman 1.0\n\n");
-
     /* If MBR detected, read MBR  */
-    if(mbr_is_present(ctx.mbr_reg)) {
+    if(mbr_is_present(ctx_mbr.mbr_reg)) {
         printf("MBR detected!\n");
-        mbr_read(ctx.mbr_reg, &ctx.mbr);
+        mbr_load(&ctx_mbr);
     }
 
 #if 0
     /* TODO: DEBUG CODE, REMOVE! */
 
-    ctx.mbr.partitions[0].boot_ind = 0x0;
-    ctx.mbr.partitions[0].type = 0xAB;
-    ctx.mbr.partitions[0].start_chs = chs_tuple_to_int(666, 11, 22);
+    ctx_mbr.mbr.partitions[0].boot_ind = 0x0;
+    ctx_mbr.mbr.partitions[0].type = 0xAB;
+    ctx_mbr.mbr.partitions[0].start_chs = chs_tuple_to_int(666, 11, 22);
     /* Max CHS for normal MBR (should be (1023, 254, 63))*/
-    ctx.mbr.partitions[0].end_chs = lba_to_chs(&ctx, 0xFFFFFFFF);
-    ctx.mbr.partitions[0].start_lba = 0xAABBCCDD;
-    ctx.mbr.partitions[0].sz_lba = 0xCCDDEEFF;
+    ctx_mbr.mbr.partitions[0].end_chs = lba_to_chs(&img_ctx, 0xFFFFFFFF);
+    ctx_mbr.mbr.partitions[0].start_lba = 0xAABBCCDD;
+    ctx_mbr.mbr.partitions[0].sz_lba = 0xCCDDEEFF;
 
-    ctx.mbr.partitions[1].boot_ind = 0x80;
-    ctx.mbr.partitions[1].type = 0xCD;
-    ctx.mbr.partitions[1].start_chs = chs_tuple_to_int(0, 0, 2);
+    ctx_mbr.mbr.partitions[1].boot_ind = 0x80;
+    ctx_mbr.mbr.partitions[1].type = 0xCD;
+    ctx_mbr.mbr.partitions[1].start_chs = chs_tuple_to_int(0, 0, 2);
     /* Max CHS for protective MBR in GPT layout */
-    ctx.mbr.partitions[1].end_chs = chs_tuple_to_int(1023, 255, 63);
-    ctx.mbr.partitions[1].start_lba = 0xDDCCBBAA;
-    ctx.mbr.partitions[1].sz_lba = 0xFFEEDDCC;
+    ctx_mbr.mbr.partitions[1].end_chs = chs_tuple_to_int(1023, 255, 63);
+    ctx_mbr.mbr.partitions[1].start_lba = 0xDDCCBBAA;
+    ctx_mbr.mbr.partitions[1].sz_lba = 0xFFEEDDCC;
 
-    mbr_write(ctx.mbr_reg, &ctx.mbr);
+    mbr_save(&ctx_mbr);
 
     goto exit;
 
 #endif
 
+    gpt_res = gpt_load(&ctx_gpt.hdr_prim, ctx_gpt.table_prim, &img_ctx,
+                       img_fd, 1);
+    if(gpt_res != gpt_load_ok) {
+        fprintf(stderr, "Failed to load primary GPT header %d\n", gpt_res);
+        goto exit;
+    }
+
     /* Start user routine */
-    r = user_routine(&ctx, img_fd);
+    r = user_routine(&ctx_mbr, &ctx_gpt, &img_ctx, img_fd);
     if(!r) {
         goto exit;
     }
@@ -204,8 +291,10 @@ int main(int argc, const char * const *argv)
     r = pres_succ;
 
 exit:
-    img_ctx_unmap(&ctx);
+    mbr_unmap(&ctx_mbr, &img_ctx);
     close(img_fd);
+    free(ctx_gpt.table_prim);
+    free(ctx_gpt.table_sec);
 
     return r ? EXIT_SUCCESS : EXIT_FAILURE;
 }
