@@ -71,28 +71,20 @@ struct schem_ctx_gpt {
     struct schem_ctx_mbr mbr_prot;
 
     /* In-memory GPT primary header structure */
-    struct gpt_hdr gpt_hdr_prim;
+    struct gpt_hdr hdr_prim;
 
     /* In-memory GPT primary table structure */
-    struct gpt_part_ent *gpt_table_prim;
+    struct gpt_part_ent *table_prim;
 
-    /* In-memory GPT atlernative header structure */
-    struct gpt_hdr gpt_hdr_alt;
+    /* In-memory GPT secondary header structure */
+    struct gpt_hdr hdr_sec;
 
-    /* In-memory GPT alternative table structure */
-    struct gpt_part_ent *gpt_table_alt;
+    /* In-memory GPT secondary table structure */
+    struct gpt_part_ent *table_sec;
+};
 
-    /* Pointer to a memory region, which maps image primary GPT header */
-    pu8 *gpt_prim_hdr_reg;
-
-    /* Pointer to a memory region, which maps image primary GPT table */
-    pu8 *gpt_prim_table_reg;
-
-    /* Pointer to a memory region, which maps image atlernative GPT header */
-    pu8 *gpt_alt_hdr_reg;
-
-    /* Pointer to a memory region, which maps image atlernative GPT table */
-    pu8 *gpt_alt_table_reg;
+enum gpt_load_res {
+    gpt_load_ok, gpt_load_fatal, gpt_load_hdr_inv, gpt_load_table_inv
 };
 
 enum {
@@ -103,17 +95,28 @@ enum {
     gpt_part_ent_sz = 128
 };
 
-void gpt_init(struct gpt_hdr *hdr);
+void gpt_init_new(struct gpt_hdr *hdr);
 
 void gpt_hdr_write(pu8 *buf, const struct gpt_hdr *hdr);
 
 void gpt_hdr_read(const pu8 *buf, struct gpt_hdr *hdr);
 
+void gpt_crc_create(struct gpt_hdr *hdr, const struct gpt_part_ent table[]);
+
 pflag gpt_is_present(const pu8 *buf);
 
-pflag gpt_is_valid(const struct gpt_hdr *hdr,
-                   const struct gpt_part_ent *table, pu64 hdr_lba);
+pflag gpt_hdr_is_valid(const struct gpt_hdr *hdr, pu64 hdr_lba);
 
-void gpt_crc_create(struct gpt_hdr *hdr, const struct gpt_part_ent *table);
+pflag gpt_table_is_valid(const struct gpt_hdr *hdr,
+                         const struct gpt_part_ent table[]);
 
+void gpt_restore(struct gpt_hdr *hdr_dst, struct gpt_part_ent table_dst[],
+                 struct gpt_hdr *hdr_src, struct gpt_part_ent table_src[]);
+
+enum gpt_load_res gpt_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],
+                           const struct img_ctx *img_ctx, int img_fd,
+                           pu64 hdr_lba);
+
+pres gpt_save(const struct gpt_hdr *hdr, const struct gpt_part_ent table[],
+              const struct img_ctx *img_ctx, int img_fd);
 #endif

@@ -2,6 +2,7 @@
 #define LIBPARTMAN_MBR_H
 
 #include "partman_types.h"
+#include "img_ctx.h"
 
 /* MBR partition structure */
 struct mbr_part {
@@ -55,6 +56,13 @@ pflag mbr_is_present(const pu8 *buf);
 
 pflag mbr_is_part_used(const struct mbr_part *part);
 
-void mbr_init_protective(struct mbr *mbr);
+pres mbr_map(struct schem_ctx_mbr *schem_ctx, const struct img_ctx *img_ctx,
+             int img_fd);
+
+pres mbr_unmap(struct schem_ctx_mbr *schem_ctx, const struct img_ctx *img_ctx);
+
+void mbr_load(struct schem_ctx_mbr *schem_ctx);
+
+void mbr_save(struct schem_ctx_mbr *schem_ctx);
 
 #endif
