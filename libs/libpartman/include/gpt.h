@@ -88,21 +88,16 @@ enum gpt_load_res {
     gpt_load_ok, gpt_load_fatal, gpt_load_hdr_inv, gpt_load_table_inv
 };
 
-enum {
-    /* GPT header size, in bytes */
-    gpt_hdr_sz      = 92,
-
-    /* GPT partition entry size, in bytes */
-    gpt_part_ent_sz = 128
-};
-
 void gpt_init_new(struct gpt_hdr *hdr);
 
 void gpt_hdr_write(pu8 *buf, const struct gpt_hdr *hdr);
 
 void gpt_hdr_read(const pu8 *buf, struct gpt_hdr *hdr);
 
-void gpt_crc_create(struct gpt_hdr *hdr, const struct gpt_part_ent table[]);
+void gpt_crc_fill_table(struct gpt_hdr *hdr,
+                        const struct gpt_part_ent table[]);
+
+void gpt_crc_fill_hdr(struct gpt_hdr *hdr);
 
 pflag gpt_is_present(const pu8 *buf);
 

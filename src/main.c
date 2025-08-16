@@ -278,13 +278,14 @@ int main(int argc, const char * const *argv)
     ctx_gpt.table_prim[0].start_lba = 2048;
     ctx_gpt.table_prim[0].end_lba = 121206783;
 
-    gpt_crc_create(&ctx_gpt.hdr_prim, ctx_gpt.table_prim);
+    gpt_crc_fill_table(&ctx_gpt.hdr_prim, ctx_gpt.table_prim);
+    gpt_crc_fill_hdr(&ctx_gpt.hdr_prim);
 
     /* Secondary GPT */
     gpt_restore(&ctx_gpt.hdr_sec, ctx_gpt.table_sec, &ctx_gpt.hdr_prim, ctx_gpt.table_prim);
     ctx_gpt.hdr_sec.part_table_lba = ctx_gpt.hdr_sec.my_lba - 32;
 
-    gpt_crc_create(&ctx_gpt.hdr_sec, ctx_gpt.table_sec);
+    gpt_crc_fill_hdr(&ctx_gpt.hdr_sec);
 
     /* Save GPTs */
     r = gpt_save(&ctx_gpt.hdr_prim, ctx_gpt.table_prim, &img_ctx);

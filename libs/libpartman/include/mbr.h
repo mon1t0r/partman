@@ -43,11 +43,6 @@ struct schem_ctx_mbr {
     pu8 *mbr_reg;
 };
 
-enum {
-    /* MBR size, in bytes */
-    mbr_sz = 512
-};
-
 void mbr_write(pu8 *buf, const struct mbr *mbr);
 
 void mbr_read(const pu8 *buf, struct mbr *mbr);
