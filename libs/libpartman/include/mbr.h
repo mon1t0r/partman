@@ -38,9 +38,10 @@ struct mbr {
 struct schem_ctx_mbr {
     /* In-memory MBR structure */
     struct mbr mbr;
+};
 
-    /* Pointer to a memory region, which maps image MBR region */
-    pu8 *mbr_reg;
+enum mbr_load_res {
+    mbr_load_ok, mbr_load_not_found, mbr_load_fatal
 };
 
 void mbr_write(pu8 *buf, const struct mbr *mbr);
@@ -51,12 +52,8 @@ pflag mbr_is_present(const pu8 *buf);
 
 pflag mbr_is_part_used(const struct mbr_part *part);
 
-pres mbr_map(struct schem_ctx_mbr *schem_ctx, const struct img_ctx *img_ctx);
+enum mbr_load_res mbr_load(struct mbr *mbr, const struct img_ctx *img_ctx);
 
-pres mbr_unmap(struct schem_ctx_mbr *schem_ctx, const struct img_ctx *img_ctx);
-
-void mbr_load(struct schem_ctx_mbr *schem_ctx);
-
-void mbr_save(struct schem_ctx_mbr *schem_ctx);
+pres mbr_save(const struct mbr *mbr, const struct img_ctx *img_ctx);
 
 #endif

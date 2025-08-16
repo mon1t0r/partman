@@ -13,6 +13,42 @@ enum {
     mbr_boot_sig = 0xAA55
 };
 
+static pu8 *mbr_map(const struct img_ctx *img_ctx)
+{
+    pu64 len;
+    pu8 *r;
+
+    /* MBR length, aligned to sectors, in bytes.
+     * MBR could possibly take less or more than 1 sector */
+    len = lba_to_byte(img_ctx, byte_to_lba(img_ctx, mbr_sz, 1));
+
+    /* Map sector(s), containing MBR, located at offset 0 */
+    r = mmap(NULL, len, PROT_READ|PROT_WRITE, MAP_SHARED, img_ctx->img_fd, 0);
+    if(r == MAP_FAILED) {
+        perror("mmap()");
+        return NULL;
+    }
+
+    return r;
+}
+
+static pres mbr_unmap(pu8 *reg, const struct img_ctx *img_ctx)
+{
+    pu64 len;
+    int c;
+
+    /* MBR length, aligned to sectors, in bytes */
+    len = lba_to_byte(img_ctx, byte_to_lba(img_ctx, mbr_sz, 1));
+
+    c = munmap(reg, len);
+    if(c == -1) {
+        perror("munmap()");
+        return pres_fail;
+    }
+
+    return pres_ok;
+}
+
 static void mbr_part_write(pu8 *buf, const struct mbr_part *mbr_part)
 {
     write_pu8 (buf,      mbr_part->boot_ind );
@@ -74,51 +110,59 @@ pflag mbr_is_part_used(const struct mbr_part *part)
     return part->type != 0 && part->sz_lba != 0;
 }
 
-pres mbr_map(struct schem_ctx_mbr *schem_ctx, const struct img_ctx *img_ctx)
+enum mbr_load_res mbr_load(struct mbr *mbr, const struct img_ctx *img_ctx)
 {
-    pu64 len;
+    enum mbr_load_res load_res;
+    pres res;
+    pu8 *reg;
 
-    /* MBR length, aligned to sectors, in bytes.
-     * MBR could possibly take less or more than 1 sector */
-    len = lba_to_byte(img_ctx, byte_to_lba(img_ctx, mbr_sz, 1));
+    /* Map MBR sector */
+    reg = mbr_map(img_ctx);
+    if(reg == NULL) {
+        fprintf(stderr, "Failed to map image MBR\n");
+        return mbr_load_fatal;
+    }
 
-    /* Map sector(s), containing MBR, located at offset 0 */
-    schem_ctx->mbr_reg = mmap(NULL, len, PROT_READ|PROT_WRITE, MAP_SHARED,
-                              img_ctx->img_fd, 0);
-    if(schem_ctx->mbr_reg == MAP_FAILED) {
-        perror("mmap()");
+    /* Check signature and read MBR */
+    if(mbr_is_present(reg)) {
+        mbr_read(reg, mbr);
+        load_res = mbr_load_ok;
+    } else {
+        load_res = mbr_load_not_found;
+    }
+
+    /* Unmap MBR sector */
+    res = mbr_unmap(reg, img_ctx);
+    if(!res) {
+        fprintf(stderr, "Failed to unmap image MBR\n");
+        return mbr_load_fatal;
+    }
+
+    return load_res;
+}
+
+pres mbr_save(const struct mbr *mbr, const struct img_ctx *img_ctx)
+{
+    pres res;
+    pu8 *reg;
+
+    /* Map MBR sector */
+    reg = mbr_map(img_ctx);
+    if(reg == NULL) {
         fprintf(stderr, "Failed to map image MBR\n");
         return pres_fail;
     }
 
-    return pres_ok;
-}
+    /* Write MBR */
+    mbr_write(reg, mbr);
 
-pres mbr_unmap(struct schem_ctx_mbr *schem_ctx, const struct img_ctx *img_ctx)
-{
-    pu64 len;
-    int c;
-
-    /* MBR length, aligned to sectors, in bytes */
-    len = lba_to_byte(img_ctx, byte_to_lba(img_ctx, mbr_sz, 1));
-
-    c = munmap(schem_ctx->mbr_reg, len);
-    if(c == -1) {
-        perror("munmap()");
+    /* Unmap MBR sector */
+    res = mbr_unmap(reg, img_ctx);
+    if(!res) {
         fprintf(stderr, "Failed to unmap image MBR\n");
         return pres_fail;
     }
-    schem_ctx->mbr_reg = NULL;
 
     return pres_ok;
 }
 
-void mbr_load(struct schem_ctx_mbr *schem_ctx)
-{
-    mbr_read(schem_ctx->mbr_reg, &schem_ctx->mbr);
-}
-
-void mbr_save(struct schem_ctx_mbr *schem_ctx)
-{
-    mbr_write(schem_ctx->mbr_reg, &schem_ctx->mbr);
-}

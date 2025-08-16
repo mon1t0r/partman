@@ -85,7 +85,13 @@ struct schem_ctx_gpt {
 };
 
 enum gpt_load_res {
-    gpt_load_ok, gpt_load_fatal, gpt_load_hdr_inv, gpt_load_table_inv
+    gpt_load_ok, gpt_load_hdr_inv, gpt_load_table_inv, gpt_load_fatal
+};
+
+enum {
+    /* Maximum supported GPT partition count. GPT partition table must
+     * be able to contain at least this number of partitions */
+    gpt_part_cnt = 128
 };
 
 void gpt_init_new(struct gpt_hdr *hdr);
@@ -107,7 +113,7 @@ pflag gpt_table_is_valid(const struct gpt_hdr *hdr,
                          const struct gpt_part_ent table[]);
 
 void gpt_restore(struct gpt_hdr *hdr_dst, struct gpt_part_ent table_dst[],
-                 const struct gpt_hdr *hdr_src,
+                 plba table_dst_lba, const struct gpt_hdr *hdr_src,
                  const struct gpt_part_ent table_src[]);
 
 pflag gpt_is_part_used(const struct gpt_part_ent *part);

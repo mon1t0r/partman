@@ -272,7 +272,8 @@ void gpt_table_write(pu8 *buf, const struct gpt_part_ent table[],
 {
     pu32 i;
 
-    for(i = 0; i < table_len; i++) {
+    /* Maximum supported number of partitions limit */
+    for(i = 0; i < table_len && i < gpt_part_cnt; i++) {
         gpt_part_ent_write(&buf[i * entry_sz], &table[i]);
     }
 }
@@ -282,7 +283,8 @@ void gpt_table_read(const pu8 *buf, struct gpt_part_ent table[],
 {
     pu32 i;
 
-    for(i = 0; i < table_len; i++) {
+    /* Maximum supported number of partitions limit */
+    for(i = 0; i < table_len && i < gpt_part_cnt; i++) {
         gpt_part_ent_read(&buf[i * entry_sz], &table[i]);
     }
 }
@@ -317,7 +319,7 @@ pflag gpt_table_is_valid(const struct gpt_hdr *hdr,
 }
 
 void gpt_restore(struct gpt_hdr *hdr_dst, struct gpt_part_ent table_dst[],
-                 const struct gpt_hdr *hdr_src,
+                 plba table_dst_lba, const struct gpt_hdr *hdr_src,
                  const struct gpt_part_ent table_src[])
 {
     pu32 i;
@@ -325,7 +327,7 @@ void gpt_restore(struct gpt_hdr *hdr_dst, struct gpt_part_ent table_dst[],
     memcpy(hdr_dst, hdr_src, sizeof(*hdr_src));
     hdr_dst->my_lba = hdr_src->alt_lba;
     hdr_dst->alt_lba = hdr_src->my_lba;
-    hdr_dst->part_table_lba = 0;
+    hdr_dst->part_table_lba = table_dst_lba;
 
     for(i = 0; i < hdr_src->part_table_entry_cnt; i++) {
         memcpy(&table_dst[i], &table_src[i], sizeof(table_src[i]));
