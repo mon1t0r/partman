@@ -94,7 +94,10 @@ enum {
     gpt_part_cnt = 128
 };
 
-void gpt_init_new(struct gpt_hdr *hdr);
+void gpt_init_new(struct gpt_hdr *hdr_prim, struct gpt_hdr *hdr_sec,
+                  struct gpt_part_ent table_prim[],
+                  struct gpt_part_ent table_sec[],
+                  const struct img_ctx *img_ctx);
 
 void gpt_hdr_write(pu8 *buf, const struct gpt_hdr *hdr);
 

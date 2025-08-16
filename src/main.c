@@ -44,7 +44,7 @@ static void schem_print_mbr(const struct schem_ctx_mbr *s_ctx_mbr)
             break;
         }
 
-        printf("=Partition №%d\n", i + 1);
+        printf("==Partition №%d\n", i + 1);
         printf("Boot         %u\n", part->boot_ind);
         printf("Type         %u\n", part->type);
         printf("Start LBA    %lu\n", part->start_lba);
@@ -82,7 +82,7 @@ static void schem_print_gpt(const struct schem_ctx_gpt *s_ctx_gpt)
         }
 
         guid_to_str(buf, &part->unique_guid);
-        printf("=Partition %s\n", buf);
+        printf("==Partition %s\n", buf);
 
         guid_to_str(buf, &part->type_guid);
         printf("Type        %s\n", buf);
@@ -140,6 +140,16 @@ action_handle(const struct img_ctx *img_ctx, struct schem_ctx *schem_ctx,
         /* Write the partition table */
         case 'w':
             res = schem_save(schem_ctx, img_ctx);
+            break;
+
+        /* Create new MBR scheme */
+        case 'o':
+            res = schem_change_type(schem_ctx, img_ctx, schem_mbr);
+            break;
+
+        /* Create new GPT scheme */
+        case 'g':
+            res = schem_change_type(schem_ctx, img_ctx, schem_gpt);
             break;
 
         /* Unknown */
@@ -263,7 +273,8 @@ int main(int argc, char * const *argv)
     res = routine_start(&img_ctx, &schem_ctx);
 
 exit:
-    schem_free(&schem_ctx);
+    /* Free scheme resources, ignore return value at this point */
+    schem_change_type(&schem_ctx, &img_ctx, schem_none);
     close(img_fd);
 
     return res;

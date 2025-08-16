@@ -205,14 +205,47 @@ static void gpt_part_ent_read(const pu8 *buf, struct gpt_part_ent *entry)
     }
 }
 
-void gpt_init_new(struct gpt_hdr *hdr)
+void gpt_init_new(struct gpt_hdr *hdr_prim, struct gpt_hdr *hdr_sec,
+                  struct gpt_part_ent table_prim[],
+                  struct gpt_part_ent table_sec[],
+                  const struct img_ctx *img_ctx)
 {
-    memset(hdr, 0, sizeof(*hdr));
+    plba hdr_lba_prim;
+    plba hdr_lba_sec;
+    plba table_sz;
+    plba table_lba_prim;
+    plba table_lba_sec;
 
-    hdr->rev = gpt_hdr_rev;
-    hdr->hdr_sz = gpt_hdr_sz;
-    guid_create(&hdr->disk_guid);
-    hdr->part_entry_sz = gpt_part_ent_sz;
+    memset(hdr_prim, 0, sizeof(*hdr_prim));
+    guid_create(&hdr_prim->disk_guid);
+    hdr_prim->rev = gpt_hdr_rev;
+    hdr_prim->hdr_sz = gpt_hdr_sz;
+
+    /* Primary GPT header is located at LBA 1 */
+    hdr_lba_prim = 1;
+
+    /* Secondary GPT header is located at image last LBA */
+    hdr_lba_sec = byte_to_lba(img_ctx, img_ctx->img_sz, 0) - 1;
+
+    /* GPT table size */
+    table_sz = byte_to_lba(img_ctx, gpt_part_cnt * gpt_part_ent_sz, 1);
+
+    /* Primary GPT table is located after primary GPT header */
+    table_lba_prim = hdr_lba_prim + 1;
+
+    /* Secondary GPT table is located before secondary GPT header */
+    table_lba_sec = hdr_lba_sec - table_sz;
+
+    hdr_prim->my_lba = hdr_lba_prim;
+    hdr_prim->alt_lba = hdr_lba_sec;
+    hdr_prim->first_usable_lba = table_lba_prim + table_sz;
+    hdr_prim->last_usable_lba = table_lba_sec - 1;
+    hdr_prim->part_table_lba = table_lba_prim;
+    hdr_prim->part_table_entry_cnt = gpt_part_cnt;
+    hdr_prim->part_entry_sz = gpt_part_ent_sz;
+
+    /* Create secondary GPT header */
+    gpt_restore(hdr_sec, table_sec, table_lba_sec, hdr_prim, table_prim);
 }
 
 void gpt_hdr_write(pu8 *buf, const struct gpt_hdr *hdr)

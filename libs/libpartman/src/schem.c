@@ -11,6 +11,32 @@ enum schem_load_res {
     schem_load_ok, schem_load_not_found, schem_load_fatal
 };
 
+static pres schem_save_mbr(const struct schem_ctx_mbr *s_ctx_mbr,
+                           const struct img_ctx *img_ctx)
+{
+    return mbr_save(&s_ctx_mbr->mbr, img_ctx);
+}
+
+static pres schem_save_gpt(const struct schem_ctx_gpt *s_ctx_gpt,
+                           const struct img_ctx *img_ctx)
+{
+    pres res;
+
+    /* Protective MBR */
+    res = mbr_save(&s_ctx_gpt->mbr_prot.mbr, img_ctx);
+    if(!res) {
+        return pres_fail;
+    }
+
+    /* UEFI specification requires to update secondary GPT first */
+    res = gpt_save(&s_ctx_gpt->hdr_sec, s_ctx_gpt->table_sec, img_ctx);
+    if(!res) {
+        return pres_fail;
+    }
+
+    return gpt_save(&s_ctx_gpt->hdr_prim, s_ctx_gpt->table_prim, img_ctx);
+}
+
 static enum schem_load_res
 schem_load_mbr(struct schem_ctx_mbr *s_ctx_mbr, const struct img_ctx *img_ctx)
 {
@@ -127,30 +153,61 @@ exit:
     return res;
 }
 
-static pres schem_save_mbr(const struct schem_ctx_mbr *s_ctx_mbr,
+static pres schem_init_mbr(struct schem_ctx_mbr *s_ctx_mbr,
                            const struct img_ctx *img_ctx)
 {
-    return mbr_save(&s_ctx_mbr->mbr, img_ctx);
+    mbr_init_new(&s_ctx_mbr->mbr);
+
+    return pres_ok;
 }
 
-static pres schem_save_gpt(const struct schem_ctx_gpt *s_ctx_gpt,
+static pres schem_init_gpt(struct schem_ctx_gpt *s_ctx_gpt,
                            const struct img_ctx *img_ctx)
 {
-    pres res;
+    s_ctx_gpt->table_prim = calloc(gpt_part_cnt, sizeof(struct gpt_part_ent));
+    s_ctx_gpt->table_sec = calloc(gpt_part_cnt, sizeof(struct gpt_part_ent));
 
-    /* Protective MBR */
-    res = mbr_save(&s_ctx_gpt->mbr_prot.mbr, img_ctx);
-    if(!res) {
+    if(s_ctx_gpt->table_prim == NULL || s_ctx_gpt->table_sec == NULL) {
         return pres_fail;
     }
 
-    /* UEFI specification requires to update secondary GPT first */
-    res = gpt_save(&s_ctx_gpt->hdr_sec, s_ctx_gpt->table_sec, img_ctx);
-    if(!res) {
-        return pres_fail;
+    gpt_init_new(&s_ctx_gpt->hdr_prim, &s_ctx_gpt->hdr_sec,
+                 s_ctx_gpt->table_prim, s_ctx_gpt->table_sec, img_ctx);
+
+    mbr_init_protective(&s_ctx_gpt->mbr_prot.mbr, img_ctx);
+
+    return pres_ok;
+}
+
+static void schem_free(struct schem_ctx *schem_ctx)
+{
+    if(schem_ctx->type == schem_gpt) {
+        free(schem_ctx->s.s_gpt.table_prim);
+        free(schem_ctx->s.s_gpt.table_sec);
+    }
+}
+
+pres schem_change_type(struct schem_ctx *schem_ctx,
+                       const struct img_ctx *img_ctx, enum schem_type type)
+{
+    schem_free(schem_ctx);
+
+    schem_ctx->type = type;
+
+    switch(type) {
+        case schem_mbr:
+            return schem_init_mbr(&schem_ctx->s.s_mbr, img_ctx);
+            break;
+
+        case schem_gpt:
+            return schem_init_gpt(&schem_ctx->s.s_gpt, img_ctx);
+            break;
+
+        case schem_none:
+            break;
     }
 
-    return gpt_save(&s_ctx_gpt->hdr_prim, s_ctx_gpt->table_prim, img_ctx);
+    return pres_ok;
 }
 
 pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
@@ -160,11 +217,12 @@ pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
     struct schem_ctx_mbr s_ctx_mbr;
     struct schem_ctx_gpt s_ctx_gpt;
 
-    /* Init schemes */
+    /* Init temp schemes */
     memset(&s_ctx_mbr, 0, sizeof(s_ctx_mbr));
     memset(&s_ctx_gpt, 0, sizeof(s_ctx_gpt));
 
-    schem_ctx->type = schem_none;
+    /* Free any previous scheme */
+    schem_change_type(schem_ctx, img_ctx, schem_none);
 
     /* Load MBR */
     load_res_mbr = schem_load_mbr(&s_ctx_mbr, img_ctx);
@@ -211,11 +269,11 @@ pres schem_save(const struct schem_ctx *schem_ctx,
                 const struct img_ctx *img_ctx)
 {
     switch(schem_ctx->type) {
-        case schem_gpt:
-            return schem_save_gpt(&schem_ctx->s.s_gpt, img_ctx);
-
         case schem_mbr:
             return schem_save_mbr(&schem_ctx->s.s_mbr, img_ctx);
+
+        case schem_gpt:
+            return schem_save_gpt(&schem_ctx->s.s_gpt, img_ctx);
 
         case schem_none:
             printf("Partitioning scheme is not present");
@@ -223,13 +281,5 @@ pres schem_save(const struct schem_ctx *schem_ctx,
     }
 
     return pres_fail;
-}
-
-void schem_free(struct schem_ctx *schem_ctx)
-{
-    if(schem_ctx->type == schem_gpt) {
-        free(schem_ctx->s.s_gpt.table_prim);
-        free(schem_ctx->s.s_gpt.table_sec);
-    }
 }
 

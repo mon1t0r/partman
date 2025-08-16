@@ -21,11 +21,12 @@ struct schem_ctx {
     } s;
 };
 
+pres schem_change_type(struct schem_ctx *schem_ctx,
+                       const struct img_ctx *img_ctx, enum schem_type type);
+
 pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx);
 
 pres schem_save(const struct schem_ctx *schem_ctx,
                 const struct img_ctx *img_ctx);
-
-void schem_free(struct schem_ctx *schem_ctx);
 
 #endif
