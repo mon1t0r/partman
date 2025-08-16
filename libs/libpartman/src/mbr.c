@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/mman.h>
 
 #include "mbr.h"
@@ -7,10 +8,13 @@
 
 enum {
     /* MBR size, in bytes */
-    mbr_sz = 512,
+    mbr_sz        = 512,
 
     /* MBR boot signature */
-    mbr_boot_sig = 0xAA55
+    mbr_boot_sig  = 0xAA55,
+
+    /* Protective MBR partition type */
+    mbr_prot_type = 0xEE
 };
 
 static pu8 *mbr_map(const struct img_ctx *img_ctx)
@@ -98,6 +102,28 @@ void mbr_read(const pu8 *buf, struct mbr *mbr)
     mbr_part_read(buf + 462, &mbr->partitions[1]);
     mbr_part_read(buf + 478, &mbr->partitions[2]);
     mbr_part_read(buf + 494, &mbr->partitions[3]);
+}
+
+void mbr_init_protective(struct mbr *mbr, const struct img_ctx *img_ctx)
+{
+    struct mbr_part *part;
+    plba img_sz_lba;
+
+    img_sz_lba = byte_to_lba(img_ctx, img_ctx->img_sz, 0);
+    if(img_sz_lba > 0xFFFFFFFF) {
+        img_sz_lba = 0x100000000;
+    }
+
+    memset(mbr, 0, sizeof(*mbr));
+
+    part = &mbr->partitions[0];
+
+    part->boot_ind = 0x0;
+    part->type = mbr_prot_type;
+    part->start_lba = 1;
+    part->sz_lba = img_sz_lba - part->start_lba;
+    part->start_chs = lba_to_chs(img_ctx, part->start_lba);
+    part->end_chs = lba_to_chs(img_ctx, part->start_lba + part->sz_lba - 1);
 }
 
 pflag mbr_is_present(const pu8 *buf)

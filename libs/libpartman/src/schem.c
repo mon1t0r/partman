@@ -64,7 +64,7 @@ schem_load_gpt(struct schem_ctx_gpt *s_ctx_gpt, const struct img_ctx *img_ctx)
     }
 
     /* Load secondary GPT */
-    gpt_res_sec = gpt_load(&s_ctx_gpt->hdr_prim, s_ctx_gpt->table_prim,
+    gpt_res_sec = gpt_load(&s_ctx_gpt->hdr_sec, s_ctx_gpt->table_sec,
                            img_ctx, gpt_lba_sec);
     if(gpt_res_sec == gpt_load_fatal) {
         fprintf(stderr, "An error occured while loading secondary GPT\n");
@@ -127,6 +127,32 @@ exit:
     return res;
 }
 
+static pres schem_save_mbr(const struct schem_ctx_mbr *s_ctx_mbr,
+                           const struct img_ctx *img_ctx)
+{
+    return mbr_save(&s_ctx_mbr->mbr, img_ctx);
+}
+
+static pres schem_save_gpt(const struct schem_ctx_gpt *s_ctx_gpt,
+                           const struct img_ctx *img_ctx)
+{
+    pres res;
+
+    /* Protective MBR */
+    res = mbr_save(&s_ctx_gpt->mbr_prot.mbr, img_ctx);
+    if(!res) {
+        return pres_fail;
+    }
+
+    /* UEFI specification requires to update secondary GPT first */
+    res = gpt_save(&s_ctx_gpt->hdr_sec, s_ctx_gpt->table_sec, img_ctx);
+    if(!res) {
+        return pres_fail;
+    }
+
+    return gpt_save(&s_ctx_gpt->hdr_prim, s_ctx_gpt->table_prim, img_ctx);
+}
+
 pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
 {
     enum schem_load_res load_res_mbr;
@@ -156,10 +182,14 @@ pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
     if(load_res_gpt == schem_load_ok) {
         memcpy(&schem_ctx->s.s_gpt, &s_ctx_gpt, sizeof(s_ctx_gpt));
 
-        /* Protective MBR is detected and loaded */
         if(load_res_mbr == schem_load_ok) {
+            /* Protective MBR is detected and loaded */
             memcpy(&schem_ctx->s.s_gpt.mbr_prot, &s_ctx_mbr,
                    sizeof(s_ctx_mbr));
+        } else {
+            /* Initialize new protective MBR */
+            mbr_init_protective(&schem_ctx->s.s_mbr.mbr, img_ctx);
+            printf("Protective MBR will be created on the next write\n");
         }
 
         schem_ctx->type = schem_gpt;
@@ -175,6 +205,24 @@ pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
     }
 
     return pres_ok;
+}
+
+pres schem_save(const struct schem_ctx *schem_ctx,
+                const struct img_ctx *img_ctx)
+{
+    switch(schem_ctx->type) {
+        case schem_gpt:
+            return schem_save_gpt(&schem_ctx->s.s_gpt, img_ctx);
+
+        case schem_mbr:
+            return schem_save_mbr(&schem_ctx->s.s_mbr, img_ctx);
+
+        case schem_none:
+            printf("Partitioning scheme is not present");
+            return pres_fail;
+    }
+
+    return pres_fail;
 }
 
 void schem_free(struct schem_ctx *schem_ctx)

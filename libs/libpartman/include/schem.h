@@ -23,6 +23,9 @@ struct schem_ctx {
 
 pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx);
 
+pres schem_save(const struct schem_ctx *schem_ctx,
+                const struct img_ctx *img_ctx);
+
 void schem_free(struct schem_ctx *schem_ctx);
 
 #endif

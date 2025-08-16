@@ -118,6 +118,10 @@ static enum action_res
 action_handle(const struct img_ctx *img_ctx, struct schem_ctx *schem_ctx,
               int sym)
 {
+    pres res;
+
+    res = pres_ok;
+
     switch(sym) {
         /* Exit */
         case 'q':
@@ -133,13 +137,18 @@ action_handle(const struct img_ctx *img_ctx, struct schem_ctx *schem_ctx,
             schem_print(schem_ctx);
             break;
 
+        /* Write the partition table */
+        case 'w':
+            res = schem_save(schem_ctx, img_ctx);
+            break;
+
         /* Unknown */
         default:
             printf("Unknown command\n");
             break;
     }
 
-    return action_continue;
+    return res ? action_continue : action_exit_fatal;
 }
 
 static pres
