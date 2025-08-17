@@ -23,14 +23,14 @@ enum action_res {
     action_continue, action_exit_ok, action_exit_fatal
 };
 
-static void schem_print_mbr(const struct schem_ctx_mbr *s_ctx_mbr)
+static void schem_print_mbr(const struct schem_mbr *schem_mbr)
 {
     const struct mbr *mbr;
     int i;
     const struct mbr_part *part;
     pu32 c, h, s;
 
-    mbr = &s_ctx_mbr->mbr;
+    mbr = &schem_mbr->mbr;
 
     printf("Disk identifier: 0x%08lx\n", mbr->disk_sig);
 
@@ -59,14 +59,14 @@ static void schem_print_mbr(const struct schem_ctx_mbr *s_ctx_mbr)
     }
 }
 
-static void schem_print_gpt(const struct schem_ctx_gpt *s_ctx_gpt)
+static void schem_print_gpt(const struct schem_gpt *schem_gpt)
 {
     const struct gpt_hdr *hdr;
     const struct gpt_part_ent *part;
     char buf[50];
     int i;
 
-    hdr = &s_ctx_gpt->hdr_prim;
+    hdr = &schem_gpt->hdr_prim;
 
     guid_to_str(buf, &hdr->disk_guid);
     printf("Disk identifier: %s\n", buf);
@@ -74,7 +74,7 @@ static void schem_print_gpt(const struct schem_ctx_gpt *s_ctx_gpt)
     printf("\n===Partitions===\n\n");
 
     for(i = 0; i < hdr->part_table_entry_cnt; i++) {
-        part = &s_ctx_gpt->table_prim[i];
+        part = &schem_gpt->table_prim[i];
 
         /* Empty partition */
         if(!gpt_is_part_used(part)) {
@@ -98,17 +98,17 @@ static void schem_print_gpt(const struct schem_ctx_gpt *s_ctx_gpt)
 static void schem_print(const struct schem_ctx *schem_ctx)
 {
     switch(schem_ctx->type) {
-        case schem_mbr:
+        case schem_type_mbr:
             printf("Partitioning scheme: MBR\n");
             schem_print_mbr(&schem_ctx->s.s_mbr);
             break;
 
-        case schem_gpt:
+        case schem_type_gpt:
             printf("Partitioning scheme: GPT\n");
             schem_print_gpt(&schem_ctx->s.s_gpt);
             break;
 
-        case schem_none:
+        case schem_type_none:
             printf("Partitioning scheme: None\n");
             break;
     }
@@ -145,12 +145,12 @@ action_handle(const struct img_ctx *img_ctx, struct schem_ctx *schem_ctx,
 
         /* Create new MBR scheme */
         case 'o':
-            res = schem_change_type(schem_ctx, img_ctx, schem_mbr);
+            res = schem_change_type(schem_ctx, img_ctx, schem_type_mbr);
             break;
 
         /* Create new GPT scheme */
         case 'g':
-            res = schem_change_type(schem_ctx, img_ctx, schem_gpt);
+            res = schem_change_type(schem_ctx, img_ctx, schem_type_gpt);
             break;
 
         /* Unknown */
@@ -263,6 +263,9 @@ int main(int argc, char * const *argv)
         goto exit;
     }
 
+    /* Initialize scheme context */
+    schem_init(&schem_ctx);
+
     /* Load schemes, which are present in image */
     res = schem_load(&schem_ctx, &img_ctx);
     if(!res) {
@@ -275,7 +278,7 @@ int main(int argc, char * const *argv)
 
 exit:
     /* Free scheme resources, ignore return value at this point */
-    schem_change_type(&schem_ctx, &img_ctx, schem_none);
+    schem_change_type(&schem_ctx, &img_ctx, schem_type_none);
     close(img_fd);
 
     return res;

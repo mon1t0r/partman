@@ -34,12 +34,6 @@ struct mbr {
     struct mbr_part partitions[4];
 };
 
-/* MBR partitioning scheme context */
-struct schem_ctx_mbr {
-    /* In-memory MBR structure */
-    struct mbr mbr;
-};
-
 enum mbr_load_res {
     mbr_load_ok, mbr_load_not_found, mbr_load_fatal
 };

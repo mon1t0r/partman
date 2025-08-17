@@ -2,9 +2,9 @@
 #define LIBPARTMAN_GPT_H
 
 #include "partman_types.h"
+#include "img_ctx.h"
 #include "guid.h"
 #include "crc32.h"
-#include "mbr.h"
 
 /* GUID Partition Table (GPT) header structure */
 struct gpt_hdr {
@@ -64,24 +64,6 @@ struct gpt_part_ent {
 
     /* Name of the partition, using UCS-2 */
     pchar_ucs name[36];
-};
-
-/* GPT partitioning scheme context */
-struct schem_ctx_gpt {
-    /* Protective MBR partitioning scheme */
-    struct schem_ctx_mbr mbr_prot;
-
-    /* In-memory GPT primary header structure */
-    struct gpt_hdr hdr_prim;
-
-    /* In-memory GPT primary table structure */
-    struct gpt_part_ent *table_prim;
-
-    /* In-memory GPT secondary header structure */
-    struct gpt_hdr hdr_sec;
-
-    /* In-memory GPT secondary table structure */
-    struct gpt_part_ent *table_sec;
 };
 
 enum gpt_load_res {
