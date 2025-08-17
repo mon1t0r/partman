@@ -153,6 +153,17 @@ exit:
     return res;
 }
 
+static void schem_sync_gpt(struct schem_ctx_gpt *s_ctx_gpt)
+{
+    /* Compute GPT table CRCs (primary table should be equal to secondary) */
+    gpt_crc_fill_table(&s_ctx_gpt->hdr_prim, s_ctx_gpt->table_prim);
+    s_ctx_gpt->hdr_sec.part_table_crc32 = s_ctx_gpt->hdr_prim.part_table_crc32;
+
+    /* Compute GPT header CRCs */
+    gpt_crc_fill_hdr(&s_ctx_gpt->hdr_prim);
+    gpt_crc_fill_hdr(&s_ctx_gpt->hdr_sec);
+}
+
 static pres schem_init_mbr(struct schem_ctx_mbr *s_ctx_mbr,
                            const struct img_ctx *img_ctx)
 {
@@ -208,6 +219,21 @@ pres schem_change_type(struct schem_ctx *schem_ctx,
     }
 
     return pres_ok;
+}
+
+void schem_sync(struct schem_ctx *schem_ctx)
+{
+    /* Perform scheme computations, which are dependent on scheme data */
+
+    switch(schem_ctx->type) {
+        case schem_gpt:
+            schem_sync_gpt(&schem_ctx->s.s_gpt);
+            break;
+
+        case schem_mbr:
+        case schem_none:
+            break;
+    }
 }
 
 pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)

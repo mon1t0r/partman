@@ -139,6 +139,7 @@ action_handle(const struct img_ctx *img_ctx, struct schem_ctx *schem_ctx,
 
         /* Write the partition table */
         case 'w':
+            schem_sync(schem_ctx);
             res = schem_save(schem_ctx, img_ctx);
             break;
 
