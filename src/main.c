@@ -115,7 +115,7 @@ static void schem_print(const struct schem_ctx *schem_ctx)
 }
 
 static enum action_res
-action_handle(const struct img_ctx *img_ctx, struct schem_ctx *schem_ctx,
+action_handle(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
               int sym)
 {
     pres res;
@@ -163,7 +163,7 @@ action_handle(const struct img_ctx *img_ctx, struct schem_ctx *schem_ctx,
 }
 
 static pres
-routine_start(const struct img_ctx *img_ctx, struct schem_ctx *schem_ctx)
+routine_start(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
 {
     char buf[input_buf_sz];
     char *s;
@@ -184,7 +184,7 @@ routine_start(const struct img_ctx *img_ctx, struct schem_ctx *schem_ctx)
             continue;
         }
 
-        res = action_handle(img_ctx, schem_ctx, s[0]);
+        res = action_handle(schem_ctx, img_ctx, s[0]);
         if(res == action_continue) {
             continue;
         }
@@ -194,7 +194,7 @@ routine_start(const struct img_ctx *img_ctx, struct schem_ctx *schem_ctx)
 }
 
 static pres
-img_init(struct img_ctx *ctx, const struct partman_opts *opts, int img_fd)
+img_init(struct img_ctx *img_ctx, const struct partman_opts *opts, int img_fd)
 {
     long long sz;
     char c;
@@ -226,7 +226,7 @@ img_init(struct img_ctx *ctx, const struct partman_opts *opts, int img_fd)
         sz = opts->img_sz;
     }
 
-    img_ctx_init(ctx, img_fd, sz);
+    img_ctx_init(img_ctx, img_fd, sz);
 
     return pres_ok;
 }
@@ -274,7 +274,7 @@ int main(int argc, char * const *argv)
     }
 
     /* Start user routine */
-    res = routine_start(&img_ctx, &schem_ctx);
+    res = routine_start(&schem_ctx, &img_ctx);
 
 exit:
     /* Free scheme resources, ignore return value at this point */

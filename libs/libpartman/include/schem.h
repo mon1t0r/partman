@@ -29,25 +29,35 @@ struct schem_gpt {
     struct gpt_part_ent *table_sec;
 };
 
+/* Partitioning scheme type */
+enum schem_type {
+    schem_type_none, schem_type_mbr, schem_type_gpt
+};
+
 /* Partitioning scheme union */
 union schem {
     struct schem_mbr s_mbr;
     struct schem_gpt s_gpt;
 };
 
-/* Partitioning scheme type */
-enum schem_type {
-    schem_type_none, schem_type_mbr, schem_type_gpt
+/* Abstract partition structure */
+struct schem_part {
+    /* Partition start LBA */
+    plba start_lba;
+
+    /* Partition end LBA */
+    plba end_lba;
 };
 
 /* Structure, which contains pointers to common scheme functions.
  * Scheme load is not present here, as at the scheme loading time
  * we do not know, which scheme will be loaded */
 struct schem_funcs {
-    pres (*init)(union schem *, const struct img_ctx *);
-    void (*sync)(union schem *);
-    pres (*save)(const union schem *, const struct img_ctx *);
-    void (*free)(union schem *);
+    pres (*init    )(union schem *, const struct img_ctx *);
+    void (*sync    )(union schem *);
+    pres (*set_part)(union schem *, pu8, const struct schem_part *);
+    pres (*save    )(const union schem *, const struct img_ctx *);
+    void (*free    )(union schem *);
 };
 
 struct schem_ctx {
@@ -67,6 +77,10 @@ pres schem_change_type(struct schem_ctx *schem_ctx,
                        const struct img_ctx *img_ctx, enum schem_type type);
 
 void schem_sync(struct schem_ctx *schem_ctx);
+
+pres
+schem_set_part(struct schem_ctx *schem_ctx, pu8 index,
+               const struct schem_part *part);
 
 pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx);
 

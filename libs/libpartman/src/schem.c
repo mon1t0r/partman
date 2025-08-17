@@ -166,6 +166,22 @@ exit:
     return res;
 }
 
+static pres schem_set_part_mbr(union schem *schem, pu8 index,
+                               const struct schem_part *part)
+{
+    struct mbr *mbr;
+
+    mbr = &schem->s_mbr.mbr;
+
+
+}
+
+static pres schem_set_part_gpt(union schem *schem, pu8 index,
+                               const struct schem_part *part)
+{
+    
+}
+
 static void schem_sync_gpt(union schem *schem)
 {
     struct schem_gpt *gpt;
@@ -216,12 +232,14 @@ static void schem_map_funcs(struct schem_funcs *funcs, enum schem_type type)
     switch(type) {
         case schem_type_mbr:
             funcs->init = &schem_init_mbr;
+            funcs->set_part = &schem_set_part_mbr;
             funcs->save = &schem_save_mbr;
             break;
 
         case schem_type_gpt:
             funcs->init = &schem_init_gpt;
             funcs->sync = &schem_sync_gpt;
+            funcs->set_part = &schem_set_part_gpt;
             funcs->save = &schem_save_gpt;
             funcs->free = &schem_free_gpt;
             break;
@@ -262,6 +280,18 @@ void schem_sync(struct schem_ctx *schem_ctx)
     if(schem_ctx->funcs.sync) {
         schem_ctx->funcs.sync(&schem_ctx->s);
     }
+}
+
+pres
+schem_set_part(struct schem_ctx *schem_ctx, pu8 index,
+               const struct schem_part *part)
+{
+    if(schem_ctx->funcs.set_part) {
+        return schem_ctx->funcs.set_part(&schem_ctx->s, index, part);
+    }
+
+    printf("Partitioning scheme is not present\n");
+    return pres_fail;
 }
 
 pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
