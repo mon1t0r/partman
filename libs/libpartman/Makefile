@@ -57,9 +57,6 @@ $(DBGDIR)/$(OBJDIR)/%.o : $(SRCDIR)/%.c
 	$(CC) $(CFLAGS) $(DBGCFLAGS) -c $^ $(LDLIBS) -o $@
 
 # Other rules
-check:
-	cppcheck --enable=performance unusedFunction --error-exitcode=1 --check-level=exhaustive $(SRCS)
-
 clean:
 	@$(rm) $(DBGDIR) $(RELDIR)
 

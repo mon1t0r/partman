@@ -44,13 +44,13 @@ enum mbr_load_res {
     mbr_load_ok, mbr_load_not_found, mbr_load_fatal
 };
 
-void mbr_write(pu8 *buf, const struct mbr *mbr);
-
-void mbr_read(const pu8 *buf, struct mbr *mbr);
-
 void mbr_init_new(struct mbr *mbr);
 
 void mbr_init_protective(struct mbr *mbr, const struct img_ctx *img_ctx);
+
+void mbr_read(const pu8 *buf, struct mbr *mbr);
+
+void mbr_write(pu8 *buf, const struct mbr *mbr);
 
 pflag mbr_is_present(const pu8 *buf);
 

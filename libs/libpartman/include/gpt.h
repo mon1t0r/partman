@@ -99,9 +99,9 @@ void gpt_init_new(struct gpt_hdr *hdr_prim, struct gpt_hdr *hdr_sec,
                   struct gpt_part_ent table_sec[],
                   const struct img_ctx *img_ctx);
 
-void gpt_hdr_write(pu8 *buf, const struct gpt_hdr *hdr);
-
 void gpt_hdr_read(const pu8 *buf, struct gpt_hdr *hdr);
+
+void gpt_hdr_write(pu8 *buf, const struct gpt_hdr *hdr);
 
 void gpt_crc_fill_table(struct gpt_hdr *hdr,
                         const struct gpt_part_ent table[]);
@@ -115,11 +115,11 @@ pflag gpt_hdr_is_valid(const struct gpt_hdr *hdr, plba hdr_lba);
 pflag gpt_table_is_valid(const struct gpt_hdr *hdr,
                          const struct gpt_part_ent table[]);
 
+pflag gpt_is_part_used(const struct gpt_part_ent *part);
+
 void gpt_restore(struct gpt_hdr *hdr_dst, struct gpt_part_ent table_dst[],
                  plba table_dst_lba, const struct gpt_hdr *hdr_src,
                  const struct gpt_part_ent table_src[]);
-
-pflag gpt_is_part_used(const struct gpt_part_ent *part);
 
 enum gpt_load_res gpt_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],
                            const struct img_ctx *img_ctx, plba hdr_lba);

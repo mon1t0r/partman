@@ -10,8 +10,8 @@ struct img_ctx {
     /* Logical sector (block) size, in bytes */
     pu64 sec_sz;
 
-    /* Image size, in bytes */
-    pu64 img_sz;
+    /* Image size, in sectors */
+    plba img_sz;
 
     /* Partition alignment, in bytes */
     pu64 align;
@@ -22,6 +22,8 @@ struct img_ctx {
     /* Maximum logical number of sectors per track (max 63) */
     pu8 spt;
 };
+
+void img_ctx_init(struct img_ctx *ctx, int img_fd, pu64 img_sz);
 
 pu64 lba_to_byte(const struct img_ctx *ctx, plba lba);
 
@@ -34,7 +36,5 @@ pchs lba_to_chs(const struct img_ctx *ctx, plba lba);
 pchs chs_tuple_to_int(pchs c, pchs h, pchs s);
 
 void chs_int_to_tuple(pchs chs, pchs *c, pchs *h, pchs *s);
-
-void img_ctx_init(struct img_ctx *ctx, int img_fd, pu64 img_sz);
 
 #endif

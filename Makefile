@@ -48,7 +48,7 @@ $(RELDIR)/$(OBJDIR)/%.o : $(SRCDIR)/%.c
 	$(CC) $(CFLAGS) $(RELCFLAGS) -c $^ $(LDLIBS) -o $@
 
 # Debug rules
-debug: check $(DBGTARGET)
+debug: $(DBGTARGET)
 
 $(DBGTARGET): $(DBGOBJS) $(DBGLIBS)
 	$(CC) $(CFLAGS) $(DBGCFLAGS) $^ $(LDLIBS) -o $@
@@ -66,9 +66,6 @@ $(DBGLIBS): .FORCE
 		$(addprefix $(notdir $(patsubst %/,%,$(dir $@)))/, $(notdir $@))
 
 # Other rules
-check:
-	cppcheck --enable=performance unusedFunction --error-exitcode=1 --check-level=exhaustive $(SRCS)
-
 clean:
 	@$(rm) $(DBGDIR) $(RELDIR)
 

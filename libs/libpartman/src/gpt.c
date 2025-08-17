@@ -248,6 +248,28 @@ void gpt_init_new(struct gpt_hdr *hdr_prim, struct gpt_hdr *hdr_sec,
     gpt_restore(hdr_sec, table_sec, table_lba_sec, hdr_prim, table_prim);
 }
 
+void gpt_hdr_read(const pu8 *buf, struct gpt_hdr *hdr)
+{
+    hdr->rev       = read_pu32(buf + 8 );
+    hdr->hdr_sz    = read_pu32(buf + 12);
+    hdr->hdr_crc32 = read_pu32(buf + 16);
+
+    /* Reserved, 4 bytes */
+
+    hdr->my_lba           = read_pu64(buf + 24);
+    hdr->alt_lba          = read_pu64(buf + 32);
+    hdr->first_usable_lba = read_pu64(buf + 40);
+    hdr->last_usable_lba  = read_pu64(buf + 48);
+
+    /* Disk GUID */
+    guid_read(buf + 56, &hdr->disk_guid);
+
+    hdr->part_table_lba       = read_pu64(buf + 72);
+    hdr->part_table_entry_cnt = read_pu32(buf + 80);
+    hdr->part_entry_sz        = read_pu32(buf + 84);
+    hdr->part_table_crc32     = read_pu32(buf + 88);
+}
+
 void gpt_hdr_write(pu8 *buf, const struct gpt_hdr *hdr)
 {
     int i;
@@ -276,28 +298,6 @@ void gpt_hdr_write(pu8 *buf, const struct gpt_hdr *hdr)
     write_pu32(buf + 80, hdr->part_table_entry_cnt);
     write_pu32(buf + 84, hdr->part_entry_sz       );
     write_pu32(buf + 88, hdr->part_table_crc32    );
-}
-
-void gpt_hdr_read(const pu8 *buf, struct gpt_hdr *hdr)
-{
-    hdr->rev       = read_pu32(buf + 8 );
-    hdr->hdr_sz    = read_pu32(buf + 12);
-    hdr->hdr_crc32 = read_pu32(buf + 16);
-
-    /* Reserved, 4 bytes */
-
-    hdr->my_lba           = read_pu64(buf + 24);
-    hdr->alt_lba          = read_pu64(buf + 32);
-    hdr->first_usable_lba = read_pu64(buf + 40);
-    hdr->last_usable_lba  = read_pu64(buf + 48);
-
-    /* Disk GUID */
-    guid_read(buf + 56, &hdr->disk_guid);
-
-    hdr->part_table_lba       = read_pu64(buf + 72);
-    hdr->part_table_entry_cnt = read_pu32(buf + 80);
-    hdr->part_entry_sz        = read_pu32(buf + 84);
-    hdr->part_table_crc32     = read_pu32(buf + 88);
 }
 
 void gpt_table_write(pu8 *buf, const struct gpt_part_ent table[],
@@ -351,6 +351,11 @@ pflag gpt_table_is_valid(const struct gpt_hdr *hdr,
            gpt_table_crc_create(table, hdr->part_table_entry_cnt);
 }
 
+pflag gpt_is_part_used(const struct gpt_part_ent *part)
+{
+    return !guid_is_zero(&part->type_guid);
+}
+
 void gpt_restore(struct gpt_hdr *hdr_dst, struct gpt_part_ent table_dst[],
                  plba table_dst_lba, const struct gpt_hdr *hdr_src,
                  const struct gpt_part_ent table_src[])
@@ -365,11 +370,6 @@ void gpt_restore(struct gpt_hdr *hdr_dst, struct gpt_part_ent table_dst[],
     for(i = 0; i < hdr_src->part_table_entry_cnt; i++) {
         memcpy(&table_dst[i], &table_src[i], sizeof(table_src[i]));
     }
-}
-
-pflag gpt_is_part_used(const struct gpt_part_ent *part)
-{
-    return !guid_is_zero(&part->type_guid);
 }
 
 enum gpt_load_res gpt_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],
