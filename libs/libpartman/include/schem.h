@@ -5,6 +5,8 @@
 #include "gpt.h"
 #include "img_ctx.h"
 
+/* === Scheme definitions === */
+
 /* MBR partitioning scheme */
 struct schem_mbr {
     /* In-memory MBR structure */
@@ -40,6 +42,8 @@ union schem {
     struct schem_gpt s_gpt;
 };
 
+/* === Scheme internals === */
+
 /* Abstract partition structure */
 struct schem_part {
     /* Partition start LBA */
@@ -49,23 +53,73 @@ struct schem_part {
     plba end_lba;
 };
 
-/* Structure, which contains pointers to common scheme functions.
- * Scheme load is not present here, as at the scheme loading time
- * we do not know, which scheme will be loaded */
+typedef
+pres (*schem_func_init) (
+    union schem             *schem,
+    const struct img_ctx    *img_ctx
+);
+
+typedef
+void (*schem_func_sync) (
+    union schem             *schem
+);
+
+typedef
+pu32 (*schem_func_get_part_cnt) (
+    const union schem       *schem
+);
+
+typedef
+void (*schem_func_get_part) (
+    const union schem       *schem,
+    const struct img_ctx    *img_ctx,
+    pu32                    index,
+    struct schem_part       *part
+);
+
+typedef
+void (*schem_func_set_part) (
+    union schem             *schem,
+    const struct img_ctx    *img_ctx,
+    pu32                    index,
+    const struct schem_part *part
+);
+
+typedef
+pres (*schem_func_save) (
+    const union schem       *schem,
+    const struct img_ctx    *img_ctx
+);
+
+typedef
+void (*schem_func_free) (
+    union schem             *schem
+);
+
+/* Pointers to common scheme functions, which can be called from outside */
 struct schem_funcs {
-    pres (*init    )(union schem *, const struct img_ctx *);
-    void (*sync    )(union schem *);
-    pres (*set_part)(union schem *, pu8, const struct schem_part *);
-    pres (*save    )(const union schem *, const struct img_ctx *);
-    void (*free    )(union schem *);
+    schem_func_sync sync;
+    schem_func_get_part_cnt get_part_cnt;
+    schem_func_get_part get_part;
+    schem_func_set_part set_part;
+    schem_func_save save;
+};
+
+/* Pointers to common scheme functions, which are internal to scheme context */
+struct schem_funcs_int {
+    schem_func_init init;
+    schem_func_free free;
 };
 
 struct schem_ctx {
     /* Partitioning scheme type */
     enum schem_type type;
 
-    /* Partitioning scheme used functions, depends on type */
+    /* Partitioning scheme public used functions, depends on type */
     struct schem_funcs funcs;
+
+    /* Partitioning scheme internal used functions, depends on type */
+    struct schem_funcs_int funcs_int;
 
     /* Partitioning scheme used, depends on type */
     union schem s;
@@ -76,15 +130,6 @@ void schem_init(struct schem_ctx *schem_ctx);
 pres schem_change_type(struct schem_ctx *schem_ctx,
                        const struct img_ctx *img_ctx, enum schem_type type);
 
-void schem_sync(struct schem_ctx *schem_ctx);
-
-pres
-schem_set_part(struct schem_ctx *schem_ctx, pu8 index,
-               const struct schem_part *part);
-
 pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx);
-
-pres schem_save(const struct schem_ctx *schem_ctx,
-                const struct img_ctx *img_ctx);
 
 #endif

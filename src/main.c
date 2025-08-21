@@ -114,6 +114,24 @@ static void schem_print(const struct schem_ctx *schem_ctx)
     }
 }
 
+static void schem_part_resize(const struct schem_ctx *schem_ctx)
+{
+#if 0
+    pu32 part_cnt;
+    struct schem_part part;
+
+    part_cnt = schem_ctx->funcs.get_part_cnt(&schem_ctx->s);
+#endif
+
+    /* TODO: Ask for number of the partition */
+
+    /* TODO: Get the partition */
+
+    /* TODO: Resize the partition */
+
+    /* TODO: Set the partition */
+}
+
 static enum action_res
 action_handle(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
               int sym)
@@ -137,10 +155,15 @@ action_handle(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
             schem_print(schem_ctx);
             break;
 
+        /* Resize a partition */
+        case 'e':
+            schem_part_resize(schem_ctx);
+            break;
+
         /* Write the partition table */
         case 'w':
-            schem_sync(schem_ctx);
-            res = schem_save(schem_ctx, img_ctx);
+            schem_ctx->funcs.sync(&schem_ctx->s);
+            res = schem_ctx->funcs.save(&schem_ctx->s, img_ctx);
             break;
 
         /* Create new MBR scheme */

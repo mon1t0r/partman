@@ -166,20 +166,64 @@ exit:
     return res;
 }
 
-static pres schem_set_part_mbr(union schem *schem, pu8 index,
-                               const struct schem_part *part)
+static void
+schem_set_part_mbr(union schem *schem, const struct img_ctx *img_ctx,
+                   pu32 index, const struct schem_part *part)
 {
-    struct mbr *mbr;
+    struct mbr_part *part_mbr;
 
-    mbr = &schem->s_mbr.mbr;
+    part_mbr = &schem->s_mbr.mbr.partitions[index];
 
-
+    part_mbr->start_lba = part->start_lba;
+    part_mbr->sz_lba = part->end_lba - part->start_lba + 1;
+    part_mbr->start_chs = lba_to_chs(img_ctx, part->start_lba);
+    part_mbr->end_chs = lba_to_chs(img_ctx, part->end_lba);
 }
 
-static pres schem_set_part_gpt(union schem *schem, pu8 index,
-                               const struct schem_part *part)
+static void
+schem_set_part_gpt(union schem *schem, const struct img_ctx *img_ctx,
+                   pu32 index, const struct schem_part *part)
 {
-    
+    struct gpt_part_ent *part_gpt;
+
+    part_gpt = &schem->s_gpt.table_prim[index];
+
+    part_gpt->start_lba = part->start_lba;
+    part_gpt->end_lba = part->end_lba;
+}
+
+static void
+schem_get_part_mbr(const union schem *schem, const struct img_ctx *img_ctx,
+                   pu32 index, struct schem_part *part)
+{
+    const struct mbr_part *part_mbr;
+
+    part_mbr = &schem->s_mbr.mbr.partitions[index];
+
+    part->start_lba = part_mbr->start_lba;
+    part->end_lba = part_mbr->start_lba + part_mbr->sz_lba - 1;
+}
+
+static void
+schem_get_part_gpt(const union schem *schem, const struct img_ctx *img_ctx,
+                   pu32 index, struct schem_part *part)
+{
+    const struct gpt_part_ent *part_gpt;
+
+    part_gpt = &schem->s_gpt.table_prim[index];
+
+    part->start_lba = part_gpt->start_lba;
+    part->end_lba = part_gpt->end_lba;
+}
+
+static pu32 schem_get_part_cnt_mbr(const union schem *schem)
+{
+    return ARRAY_SIZE(schem->s_mbr.mbr.partitions);
+}
+
+static pu32 schem_get_part_cnt_gpt(const union schem *schem)
+{
+    return schem->s_gpt.hdr_prim.part_table_entry_cnt;
 }
 
 static void schem_sync_gpt(union schem *schem)
@@ -231,17 +275,38 @@ static void schem_map_funcs(struct schem_funcs *funcs, enum schem_type type)
 
     switch(type) {
         case schem_type_mbr:
-            funcs->init = &schem_init_mbr;
+            funcs->get_part_cnt = &schem_get_part_cnt_mbr;
+            funcs->get_part = &schem_get_part_mbr;
             funcs->set_part = &schem_set_part_mbr;
             funcs->save = &schem_save_mbr;
             break;
 
         case schem_type_gpt:
-            funcs->init = &schem_init_gpt;
             funcs->sync = &schem_sync_gpt;
+            funcs->get_part_cnt = &schem_get_part_cnt_gpt;
+            funcs->get_part = &schem_get_part_gpt;
             funcs->set_part = &schem_set_part_gpt;
             funcs->save = &schem_save_gpt;
-            funcs->free = &schem_free_gpt;
+            break;
+
+        case schem_type_none:
+            break;
+    }
+}
+
+static void
+schem_map_funcs_int(struct schem_funcs_int *funcs_int, enum schem_type type)
+{
+    memset(funcs_int, 0, sizeof(*funcs_int));
+
+    switch(type) {
+        case schem_type_mbr:
+            funcs_int->init = &schem_init_mbr;
+            break;
+
+        case schem_type_gpt:
+            funcs_int->init = &schem_init_gpt;
+            funcs_int->free = &schem_free_gpt;
             break;
 
         case schem_type_none:
@@ -259,39 +324,19 @@ void schem_init(struct schem_ctx *schem_ctx)
 pres schem_change_type(struct schem_ctx *schem_ctx,
                        const struct img_ctx *img_ctx, enum schem_type type)
 {
-    if(schem_ctx->funcs.free) {
-        schem_ctx->funcs.free(&schem_ctx->s);
+    if(schem_ctx->funcs_int.free) {
+        schem_ctx->funcs_int.free(&schem_ctx->s);
     }
 
     schem_ctx->type = type;
     schem_map_funcs(&schem_ctx->funcs, type);
+    schem_map_funcs_int(&schem_ctx->funcs_int, type);
 
-    if(schem_ctx->funcs.init) {
-        return schem_ctx->funcs.init(&schem_ctx->s, img_ctx);
+    if(schem_ctx->funcs_int.init) {
+        return schem_ctx->funcs_int.init(&schem_ctx->s, img_ctx);
     }
 
     return pres_ok;
-}
-
-void schem_sync(struct schem_ctx *schem_ctx)
-{
-    /* Perform scheme computations, which are dependent on scheme data */
-
-    if(schem_ctx->funcs.sync) {
-        schem_ctx->funcs.sync(&schem_ctx->s);
-    }
-}
-
-pres
-schem_set_part(struct schem_ctx *schem_ctx, pu8 index,
-               const struct schem_part *part)
-{
-    if(schem_ctx->funcs.set_part) {
-        return schem_ctx->funcs.set_part(&schem_ctx->s, index, part);
-    }
-
-    printf("Partitioning scheme is not present\n");
-    return pres_fail;
 }
 
 pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
@@ -348,16 +393,5 @@ pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
     }
 
     return pres_ok;
-}
-
-pres schem_save(const struct schem_ctx *schem_ctx,
-                const struct img_ctx *img_ctx)
-{
-    if(schem_ctx->funcs.save) {
-        return schem_ctx->funcs.save(&schem_ctx->s, img_ctx);
-    }
-
-    printf("Partitioning scheme is not present\n");
-    return pres_fail;
 }
 
