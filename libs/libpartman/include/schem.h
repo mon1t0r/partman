@@ -53,6 +53,18 @@ struct schem_part {
     plba end_lba;
 };
 
+/* Scheme info structure */
+struct schem_info {
+    /* First usable LBA */
+    plba first_usable_lba;
+
+    /* Last usable LBA */
+    plba last_usable_lba;
+
+    /* Partition count */
+    pu32 part_cnt;
+};
+
 typedef
 pres (*schem_func_init) (
     union schem             *schem,
@@ -65,35 +77,43 @@ void (*schem_func_sync) (
 );
 
 typedef
-pu32 (*schem_func_get_part_cnt) (
-    const union schem       *schem
+void (*schem_func_get_info) (
+    const union schem       *schem,
+    const struct img_ctx    *img_ctx,
+    struct schem_info       *info
 );
 
 typedef
-pflag (*schem_func_is_part_used) (
+pflag (*schem_func_part_is_used) (
     const union schem       *schem,
     pu32                    index
 );
 
 typedef
-void (*schem_func_get_part) (
+void (*schem_func_part_new) (
+    union schem             *schem,
+    pu32                    index
+);
+
+typedef
+void (*schem_func_part_delete) (
+    union schem             *schem,
+    pu32                    index
+);
+
+typedef
+void (*schem_func_part_get) (
     const union schem       *schem,
     pu32                    index,
     struct schem_part       *part
 );
 
 typedef
-void (*schem_func_set_part) (
+void (*schem_func_part_set) (
     union schem             *schem,
     const struct img_ctx    *img_ctx,
     pu32                    index,
     const struct schem_part *part
-);
-
-typedef
-void (*schem_func_new_part) (
-    union schem             *schem,
-    pu32                    index
 );
 
 typedef
@@ -110,11 +130,12 @@ void (*schem_func_free) (
 /* Pointers to common scheme functions, which can be called from outside */
 struct schem_funcs {
     schem_func_sync sync;
-    schem_func_get_part_cnt get_part_cnt;
-    schem_func_is_part_used is_part_used;
-    schem_func_set_part set_part;
-    schem_func_get_part get_part;
-    schem_func_new_part new_part;
+    schem_func_get_info get_info;
+    schem_func_part_is_used part_is_used;
+    schem_func_part_new part_new;
+    schem_func_part_delete part_delete;
+    schem_func_part_get part_get;
+    schem_func_part_set part_set;
     schem_func_save save;
 };
 

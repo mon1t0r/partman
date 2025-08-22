@@ -7,9 +7,6 @@
 #include "memutils.h"
 
 enum {
-    /* MBR size, in bytes */
-    mbr_sz        = 512,
-
     /* MBR boot signature */
     mbr_boot_sig  = 0xAA55,
 

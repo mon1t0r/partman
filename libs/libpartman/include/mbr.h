@@ -4,6 +4,11 @@
 #include "partman_types.h"
 #include "img_ctx.h"
 
+enum {
+    /* MBR size, in bytes */
+    mbr_sz = 512
+};
+
 /* MBR partition structure */
 struct mbr_part {
     /* Boot indicator */

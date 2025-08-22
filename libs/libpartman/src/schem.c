@@ -171,27 +171,8 @@ exit:
     return res;
 }
 
-static void schem_new_part_mbr(union schem *schem, pu32 index)
-{
-    struct mbr_part *part_mbr;
-
-    part_mbr = &schem->s_mbr.mbr.partitions[index];
-
-    part_mbr->type = 0x83;
-}
-
-static void schem_new_part_gpt(union schem *schem, pu32 index)
-{
-    struct gpt_part_ent *part_gpt;
-
-    part_gpt = &schem->s_gpt.table_prim[index];
-
-    guid_create(&part_gpt->unique_guid);
-    part_gpt->type_guid = guid_linux_fs;
-}
-
 static void
-schem_set_part_mbr(union schem *schem, const struct img_ctx *img_ctx,
+schem_part_set_mbr(union schem *schem, const struct img_ctx *img_ctx,
                    pu32 index, const struct schem_part *part)
 {
     struct mbr_part *part_mbr;
@@ -205,7 +186,7 @@ schem_set_part_mbr(union schem *schem, const struct img_ctx *img_ctx,
 }
 
 static void
-schem_set_part_gpt(union schem *schem, const struct img_ctx *img_ctx,
+schem_part_set_gpt(union schem *schem, const struct img_ctx *img_ctx,
                    pu32 index, const struct schem_part *part)
 {
     struct gpt_part_ent *part_gpt;
@@ -217,7 +198,7 @@ schem_set_part_gpt(union schem *schem, const struct img_ctx *img_ctx,
 }
 
 static void
-schem_get_part_mbr(const union schem *schem, pu32 index,
+schem_part_get_mbr(const union schem *schem, pu32 index,
                    struct schem_part *part)
 {
     const struct mbr_part *part_mbr;
@@ -229,7 +210,7 @@ schem_get_part_mbr(const union schem *schem, pu32 index,
 }
 
 static void
-schem_get_part_gpt(const union schem *schem, pu32 index,
+schem_part_get_gpt(const union schem *schem, pu32 index,
                    struct schem_part *part)
 {
     const struct gpt_part_ent *part_gpt;
@@ -240,24 +221,73 @@ schem_get_part_gpt(const union schem *schem, pu32 index,
     part->end_lba = part_gpt->end_lba;
 }
 
-static pflag schem_is_part_used_mbr(const union schem *schem, pu32 index)
+static void schem_part_delete_mbr(union schem *schem, pu32 index)
+{
+    struct mbr_part *part_mbr;
+
+    part_mbr = &schem->s_mbr.mbr.partitions[index];
+
+    memset(part_mbr, 0, sizeof(*part_mbr));
+}
+
+static void schem_part_delete_gpt(union schem *schem, pu32 index)
+{
+    struct gpt_part_ent *part_gpt;
+
+    part_gpt = &schem->s_gpt.table_prim[index];
+
+    memset(part_gpt, 0, sizeof(*part_gpt));
+}
+
+static void schem_part_new_mbr(union schem *schem, pu32 index)
+{
+    struct mbr_part *part_mbr;
+
+    part_mbr = &schem->s_mbr.mbr.partitions[index];
+
+    part_mbr->type = 0x83;
+}
+
+static void schem_part_new_gpt(union schem *schem, pu32 index)
+{
+    struct gpt_part_ent *part_gpt;
+
+    part_gpt = &schem->s_gpt.table_prim[index];
+
+    guid_create(&part_gpt->unique_guid);
+    part_gpt->type_guid = guid_linux_fs;
+}
+
+static pflag schem_part_is_used_mbr(const union schem *schem, pu32 index)
 {
     return mbr_is_part_used(&schem->s_mbr.mbr.partitions[index]);
 }
 
-static pflag schem_is_part_used_gpt(const union schem *schem, pu32 index)
+static pflag schem_part_is_used_gpt(const union schem *schem, pu32 index)
 {
     return gpt_is_part_used(&schem->s_gpt.table_prim[index]);
 }
 
-static pu32 schem_get_part_cnt_mbr(const union schem *schem)
+static void
+schem_get_info_mbr(const union schem *schem, const struct img_ctx *img_ctx,
+                   struct schem_info *info)
 {
-    return ARRAY_SIZE(schem->s_mbr.mbr.partitions);
+    info->first_usable_lba = byte_to_lba(img_ctx, mbr_sz, 1);
+    info->last_usable_lba = byte_to_lba(img_ctx, img_ctx->img_sz, 0);
+    info->part_cnt = ARRAY_SIZE(schem->s_mbr.mbr.partitions);
 }
 
-static pu32 schem_get_part_cnt_gpt(const union schem *schem)
+static void
+schem_get_info_gpt(const union schem *schem, const struct img_ctx *img_ctx,
+                   struct schem_info *info)
 {
-    return schem->s_gpt.hdr_prim.part_table_entry_cnt;
+    const struct gpt_hdr *hdr;
+
+    hdr = &schem->s_gpt.hdr_prim;
+
+    info->first_usable_lba = hdr->first_usable_lba;
+    info->last_usable_lba = hdr->last_usable_lba;
+    info->part_cnt = hdr->part_table_entry_cnt;
 }
 
 static void schem_sync_gpt(union schem *schem)
@@ -309,22 +339,24 @@ static void schem_map_funcs(struct schem_funcs *funcs, enum schem_type type)
 
     switch(type) {
         case schem_type_mbr:
-            funcs->get_part_cnt = &schem_get_part_cnt_mbr;
-            funcs->is_part_used = &schem_is_part_used_mbr;
-            funcs->get_part = &schem_get_part_mbr;
-            funcs->set_part = &schem_set_part_mbr;
-            funcs->new_part = &schem_new_part_mbr;
-            funcs->save = &schem_save_mbr;
+            funcs->get_info     = &schem_get_info_mbr;
+            funcs->part_is_used = &schem_part_is_used_mbr;
+            funcs->part_new     = &schem_part_new_mbr;
+            funcs->part_delete  = &schem_part_delete_mbr;
+            funcs->part_get     = &schem_part_get_mbr;
+            funcs->part_set     = &schem_part_set_mbr;
+            funcs->save         = &schem_save_mbr;
             break;
 
         case schem_type_gpt:
-            funcs->sync = &schem_sync_gpt;
-            funcs->get_part_cnt = &schem_get_part_cnt_gpt;
-            funcs->is_part_used = &schem_is_part_used_gpt;
-            funcs->get_part = &schem_get_part_gpt;
-            funcs->set_part = &schem_set_part_gpt;
-            funcs->new_part = &schem_new_part_gpt;
-            funcs->save = &schem_save_gpt;
+            funcs->sync         = &schem_sync_gpt;
+            funcs->get_info     = &schem_get_info_gpt;
+            funcs->part_is_used = &schem_part_is_used_gpt;
+            funcs->part_new     = &schem_part_new_gpt;
+            funcs->part_delete  = &schem_part_delete_gpt;
+            funcs->part_get     = &schem_part_get_gpt;
+            funcs->part_set     = &schem_part_set_gpt;
+            funcs->save         = &schem_save_gpt;
             break;
 
         case schem_type_none:

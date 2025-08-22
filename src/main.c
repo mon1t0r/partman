@@ -112,25 +112,22 @@ static void schem_print(const struct schem_ctx *schem_ctx)
 }
 
 static pflag
-schem_check_overlap(const struct schem_ctx *schem_ctx,
+schem_check_overlap(const struct schem_ctx *schem_ctx, pu32 part_cnt,
                     const struct schem_part *part1, pu32 *index)
 {
-    pu32 part_cnt;
     pu32 i;
     struct schem_part part2;
-
-    part_cnt = schem_ctx->funcs.get_part_cnt(&schem_ctx->s);
 
     for(i = 0; i < part_cnt; i++) {
         if(i == *index) {
             continue;
         }
 
-        if(!schem_ctx->funcs.is_part_used(&schem_ctx->s, i)) {
+        if(!schem_ctx->funcs.part_is_used(&schem_ctx->s, i)) {
             continue;
         }
 
-        schem_ctx->funcs.get_part(&schem_ctx->s, i, &part2);
+        schem_ctx->funcs.part_get(&schem_ctx->s, i, &part2);
 
         /* Start LBA is inside of the partition */
         if(
@@ -163,27 +160,55 @@ schem_check_overlap(const struct schem_ctx *schem_ctx,
     return 0;
 }
 
-static void
-schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
-                 pflag is_new)
+static void schem_part_delete(struct schem_ctx *schem_ctx,
+                              const struct img_ctx *img_ctx)
 {
-    pu32 part_cnt;
+    struct schem_info info;
     pu32 part_index;
     pflag part_used;
-    struct schem_part part;
 
-    part_cnt = schem_ctx->funcs.get_part_cnt(&schem_ctx->s);
+    schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
     printf("Partition number: ");
 
     part_index = scan_pu32();
-    if(part_index < 1 || part_index > part_cnt) {
-        printf("Invalid value\n");
+    if(part_index < 1 || part_index > info.part_cnt) {
+        printf("Invalid index\n");
         return;
     }
     part_index--;
 
-    part_used = schem_ctx->funcs.is_part_used(&schem_ctx->s, part_index);
+    part_used = schem_ctx->funcs.part_is_used(&schem_ctx->s, part_index);
+
+    if(!part_used) {
+        printf("Partition is not in use\n");
+        return;
+    }
+
+    schem_ctx->funcs.part_delete(&schem_ctx->s, part_index);
+}
+
+static void
+schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
+                 pflag is_new)
+{
+    struct schem_info info;
+    pu32 part_index;
+    pflag part_used;
+    struct schem_part part;
+
+    schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
+
+    printf("Partition number: ");
+
+    part_index = scan_pu32();
+    if(part_index < 1 || part_index > info.part_cnt) {
+        printf("Invalid index\n");
+        return;
+    }
+    part_index--;
+
+    part_used = schem_ctx->funcs.part_is_used(&schem_ctx->s, part_index);
 
     if(!is_new && !part_used) {
         printf("Partition is not in use\n");
@@ -196,27 +221,35 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
 
     printf("First sector: ");
     part.start_lba = scan_pu64();
-
-    printf("Last sector: ");
-    part.end_lba = scan_pu64();
-
-    if(part.end_lba < part.start_lba) {
-        printf("Last sector must be greater, than first sector\n");
+    if(part.start_lba < info.first_usable_lba) {
+        printf("First sector must be greater than or equal to "
+               "first usable sector\n");
         return;
     }
 
-    /* TODO: Add boundaries check */
+    printf("Last sector: ");
+    part.end_lba = scan_pu64();
+    if(part.end_lba > info.last_usable_lba) {
+        printf("Last sector must be less than or equal to "
+               "last usable sector\n");
+        return;
+    }
 
-    if(schem_check_overlap(schem_ctx, &part, &part_index)) {
+    if(part.end_lba < part.start_lba) {
+        printf("Last sector must be greater than first sector\n");
+        return;
+    }
+
+    if(schem_check_overlap(schem_ctx, info.part_cnt, &part, &part_index)) {
         printf("Overlap detected with partition #%lu\n", part_index + 1);
         return;
     }
 
     if(is_new) {
-        schem_ctx->funcs.new_part(&schem_ctx->s, part_index);
+        schem_ctx->funcs.part_new(&schem_ctx->s, part_index);
     }
 
-    schem_ctx->funcs.set_part(&schem_ctx->s, img_ctx, part_index, &part);
+    schem_ctx->funcs.part_set(&schem_ctx->s, img_ctx, part_index, &part);
 }
 
 static enum action_res
@@ -250,6 +283,11 @@ action_handle(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
         /* Resize a partition */
         case 'e':
             schem_part_alter(schem_ctx, img_ctx, 0);
+            break;
+
+        /* Delete a partition */
+        case 'd':
+            schem_part_delete(schem_ctx, img_ctx);
             break;
 
         /* Write the partition table */
