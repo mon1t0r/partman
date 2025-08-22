@@ -3,10 +3,20 @@
 
 #include "partman_types.h"
 
-int scan_char(void);
+enum scan_res {
+    scan_ok, scan_empty, scan_eof, scan_fail
+};
 
-pu32 scan_pu32(void);
+enum scan_res scan_char(const char *prompt, char *c);
 
-pu64 scan_pu64(void);
+enum scan_res scan_pu32(const char *prompt, pu32 *int_ptr);
+
+enum scan_res scan_pu64(const char *prompt, pu64 *int_ptr);
+
+enum scan_res scan_range_pu32(const char *prompt, pu32 *int_ptr, pu32 start,
+                              pu32 end, pu32 def);
+
+enum scan_res scan_range_pu64(const char *prompt, pu64 *int_ptr, pu64 start,
+                              pu64 end, pu64 def);
 
 #endif

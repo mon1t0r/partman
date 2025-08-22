@@ -118,22 +118,19 @@ static void schem_part_delete(struct schem_ctx *schem_ctx,
 {
     struct schem_info info;
     pu32 part_index;
-    pflag part_used;
+    enum scan_res scan_res;
 
     schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
-    printf("Partition number: ");
-
-    part_index = scan_pu32();
-    if(part_index < 1 || part_index > info.part_cnt) {
-        printf("Invalid index\n");
+    scan_res = scan_range_pu32("Partition number", &part_index,
+                               1, info.part_cnt, 1);
+    if(scan_res != scan_ok) {
         return;
     }
+
     part_index--;
 
-    part_used = schem_ctx->funcs.part_is_used(&schem_ctx->s, part_index);
-
-    if(!part_used) {
+    if(!schem_ctx->funcs.part_is_used(&schem_ctx->s, part_index)) {
         printf("Partition is not in use\n");
         return;
     }
@@ -147,18 +144,18 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
 {
     struct schem_info info;
     pu32 part_index;
+    enum scan_res scan_res;
     pflag part_used;
     struct schem_part part;
 
     schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
-    printf("Partition number: ");
-
-    part_index = scan_pu32();
-    if(part_index < 1 || part_index > info.part_cnt) {
-        printf("Invalid index\n");
+    scan_res = scan_range_pu32("Partition number", &part_index,
+                               1, info.part_cnt, 1);
+    if(scan_res != scan_ok) {
         return;
     }
+
     part_index--;
 
     part_used = schem_ctx->funcs.part_is_used(&schem_ctx->s, part_index);
@@ -172,24 +169,17 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
         return;
     }
 
-    printf("First sector: ");
-    part.start_lba = scan_pu64();
-    if(part.start_lba < info.first_usable_lba) {
-        printf("First sector must be greater than or equal to "
-               "first usable sector\n");
+    scan_res = scan_range_pu64("First sector", &part.start_lba,
+                               info.first_usable_lba, info.last_usable_lba,
+                               info.first_usable_lba);
+    if(scan_res != scan_ok) {
         return;
     }
 
-    printf("Last sector: ");
-    part.end_lba = scan_pu64();
-    if(part.end_lba > info.last_usable_lba) {
-        printf("Last sector must be less than or equal to "
-               "last usable sector\n");
-        return;
-    }
-
-    if(part.end_lba < part.start_lba) {
-        printf("Last sector must be greater than first sector\n");
+    scan_res = scan_range_pu64("Last sector", &part.end_lba,
+                               part.start_lba, info.last_usable_lba,
+                               part.start_lba);
+    if(scan_res != scan_ok) {
         return;
     }
 
@@ -273,25 +263,31 @@ action_handle(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
 static pres
 routine_start(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
 {
-    int c;
-    enum action_res res;
+    char c;
+    enum scan_res scan_res;
+    enum action_res action_res;
 
     for(;;) {
-        printf("\nCommand (m for help): ");
+        scan_res = scan_char("Command (m for help)", &c);
 
-        c = scan_char();
         /* End of file */
-        if(c == -1) {
+        if(scan_res == scan_eof) {
             printf("\n");
             return pres_ok;
         }
 
-        res = action_handle(schem_ctx, img_ctx, c);
-        if(res == action_continue) {
+        /* Error - unknown command */
+        if(scan_res != scan_ok) {
+            c = '\0';
+        }
+
+        action_res = action_handle(schem_ctx, img_ctx, c);
+        if(action_res == action_continue) {
+            printf("\n");
             continue;
         }
 
-        return res == action_exit_ok ? pres_ok : pres_fail;
+        return action_res == action_exit_ok ? pres_ok : pres_fail;
     }
 }
 
