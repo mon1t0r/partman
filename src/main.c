@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <time.h>
 #include <fcntl.h>
 
 #include "partman_types.h"
@@ -21,36 +22,37 @@ enum action_res {
 static void schem_print_mbr(const struct schem_mbr *schem_mbr)
 {
     const struct mbr *mbr;
-    int i;
     const struct mbr_part *part;
+    int i;
     pu32 c, h, s;
 
     mbr = &schem_mbr->mbr;
 
-    printf("Disk identifier: 0x%08lx\n", mbr->disk_sig);
+    printf("Partitioning scheme: MBR\n");
+    printf("Disk identifier: 0x%08lx\n\n", mbr->disk_sig);
 
-    printf("\n===Partitions===\n\n");
+    printf("=== Partitions ===\n");
 
     for(i = 0; i < ARRAY_SIZE(mbr->partitions); i++) {
         part = &mbr->partitions[i];
 
         /* Empty partition */
         if(!mbr_is_part_used(part)) {
-            break;
+            continue;
         }
 
-        printf("==Partition #%d\n", i + 1);
-        printf("Boot         %u\n", part->boot_ind);
-        printf("Type         %u\n", part->type);
-        printf("Start LBA    %lu\n", part->start_lba);
-        printf("End LBA      %lu\n", part->start_lba + part->sz_lba - 1);
-        printf("Sectors      %lu\n", part->sz_lba);
+        printf("Partition #%d\n", i + 1);
+        printf("|-Boot         %u\n", part->boot_ind);
+        printf("|-Type         %u\n", part->type);
+        printf("|-Start LBA    %lu\n", part->start_lba);
+        printf("|-End LBA      %lu\n", part->start_lba + part->sz_lba - 1);
+        printf("|-Sectors      %lu\n", part->sz_lba);
 
         chs_int_to_tuple(part->start_chs, &c, &h, &s);
-        printf("Start C/H/S  %03lu/%03lu/%03lu\n", c, h, s);
+        printf("|-Start C/H/S  %03lu/%03lu/%03lu\n", c, h, s);
 
         chs_int_to_tuple(part->end_chs, &c, &h, &s);
-        printf("End C/H/S    %03lu/%03lu/%03lu\n\n", c, h, s);
+        printf("|-End C/H/S    %03lu/%03lu/%03lu\n\n", c, h, s);
     }
 }
 
@@ -63,30 +65,32 @@ static void schem_print_gpt(const struct schem_gpt *schem_gpt)
 
     hdr = &schem_gpt->hdr_prim;
 
-    guid_to_str(buf, &hdr->disk_guid);
-    printf("Disk identifier: %s\n", buf);
+    printf("Partitioning scheme: GPT\n");
 
-    printf("\n===Partitions===\n\n");
+    guid_to_str(buf, &hdr->disk_guid);
+    printf("Disk identifier: %s\n\n", buf);
+
+    printf("=== Partitions === \n");
 
     for(i = 0; i < hdr->part_table_entry_cnt; i++) {
         part = &schem_gpt->table_prim[i];
 
         /* Empty partition */
         if(!gpt_is_part_used(part)) {
-            break;
+            continue;
         }
 
-        printf("==Partition #%d\n", i + 1);
+        printf("Partition #%d\n", i + 1);
 
         guid_to_str(buf, &part->unique_guid);
-        printf("Id          %s\n", buf);
+        printf("|-Id          %s\n", buf);
 
         guid_to_str(buf, &part->type_guid);
-        printf("Type        %s\n", buf);
+        printf("|-Type        %s\n", buf);
 
-        printf("Start LBA   %llu\n", part->start_lba);
-        printf("End LBA     %llu\n", part->end_lba);
-        printf("Sectors     %llu\n", part->end_lba - part->start_lba + 1);
+        printf("|-Start LBA   %llu\n", part->start_lba);
+        printf("|-End LBA     %llu\n", part->end_lba);
+        printf("|-Sectors     %llu\n", part->end_lba - part->start_lba + 1);
 
         /* TODO: Print partition name */
     }
@@ -96,12 +100,10 @@ static void schem_print(const struct schem_ctx *schem_ctx)
 {
     switch(schem_ctx->type) {
         case schem_type_mbr:
-            printf("Partitioning scheme: MBR\n");
             schem_print_mbr(&schem_ctx->s.s_mbr);
             break;
 
         case schem_type_gpt:
-            printf("Partitioning scheme: GPT\n");
             schem_print_gpt(&schem_ctx->s.s_gpt);
             break;
 
@@ -109,55 +111,6 @@ static void schem_print(const struct schem_ctx *schem_ctx)
             printf("Partitioning scheme: None\n");
             break;
     }
-}
-
-static pflag
-schem_check_overlap(const struct schem_ctx *schem_ctx, pu32 part_cnt,
-                    const struct schem_part *part1, pu32 *index)
-{
-    pu32 i;
-    struct schem_part part2;
-
-    for(i = 0; i < part_cnt; i++) {
-        if(i == *index) {
-            continue;
-        }
-
-        if(!schem_ctx->funcs.part_is_used(&schem_ctx->s, i)) {
-            continue;
-        }
-
-        schem_ctx->funcs.part_get(&schem_ctx->s, i, &part2);
-
-        /* Start LBA is inside of the partition */
-        if(
-            part1->start_lba >= part2.start_lba &&
-            part1->start_lba <= part2.end_lba
-        ) {
-            *index = i;
-            return 1;
-        }
-
-        /* End LBA is inside of the partition */
-        if(
-            part1->end_lba >= part2.start_lba &&
-            part1->end_lba <= part2.end_lba
-        ) {
-            *index = i;
-            return 1;
-        }
-
-        /* Partition is inside of the boundaries */
-        if(
-            part1->start_lba < part2.start_lba &&
-            part1->end_lba > part2.end_lba
-        ) {
-            *index = i;
-            return 1;
-        }
-    }
-
-    return 0;
 }
 
 static void schem_part_delete(struct schem_ctx *schem_ctx,
@@ -380,7 +333,7 @@ img_init(struct img_ctx *img_ctx, const struct partman_opts *opts, int img_fd)
     return pres_ok;
 }
 
-int main(int argc, char * const *argv)
+int main(int argc, char *const *argv)
 {
     struct partman_opts opts;
     pres res;
@@ -396,6 +349,9 @@ int main(int argc, char * const *argv)
     }
 
     printf("partman %s\n\n", PARTMAN_VER);
+
+    /* Initialize random */
+    srand(time(NULL));
 
     /* Open file */
     img_fd = open(opts.img_name, O_RDWR|O_CREAT, 0666);
@@ -432,3 +388,4 @@ exit:
 
     return res;
 }
+

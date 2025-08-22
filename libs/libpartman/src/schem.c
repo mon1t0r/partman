@@ -16,15 +16,7 @@ const struct guid guid_linux_fs = {
     { 0x3D, 0x69, 0xD8, 0x47, 0x7D, 0xE4 }
 };
 
-static void schem_free_gpt(union schem *schem)
-{
-    struct schem_gpt *gpt;
-
-    gpt = &schem->s_gpt;
-
-    free(gpt->table_prim);
-    free(gpt->table_sec);
-}
+/* === MBR === */
 
 static pres schem_save_mbr(const union schem *schem,
                            const struct img_ctx *img_ctx)
@@ -67,11 +59,87 @@ schem_load_mbr(struct schem_mbr *schem_mbr, const struct img_ctx *img_ctx)
     }
 
     if(mbr_res == mbr_load_ok) {
-        printf("MBR detected\n");
         return schem_load_ok;
     }
 
     return schem_load_not_found;
+}
+
+static void
+schem_part_set_mbr(union schem *schem, const struct img_ctx *img_ctx,
+                   pu32 index, const struct schem_part *part)
+{
+    struct mbr_part *part_mbr;
+
+    part_mbr = &schem->s_mbr.mbr.partitions[index];
+
+    part_mbr->start_lba = part->start_lba;
+    part_mbr->sz_lba = part->end_lba - part->start_lba + 1;
+    part_mbr->start_chs = lba_to_chs(img_ctx, part->start_lba);
+    part_mbr->end_chs = lba_to_chs(img_ctx, part->end_lba);
+}
+
+static void
+schem_part_get_mbr(const union schem *schem, pu32 index,
+                   struct schem_part *part)
+{
+    const struct mbr_part *part_mbr;
+
+    part_mbr = &schem->s_mbr.mbr.partitions[index];
+
+    part->start_lba = part_mbr->start_lba;
+    part->end_lba = part_mbr->start_lba + part_mbr->sz_lba - 1;
+}
+
+static void schem_part_delete_mbr(union schem *schem, pu32 index)
+{
+    struct mbr_part *part_mbr;
+
+    part_mbr = &schem->s_mbr.mbr.partitions[index];
+
+    memset(part_mbr, 0, sizeof(*part_mbr));
+}
+
+static void schem_part_new_mbr(union schem *schem, pu32 index)
+{
+    struct mbr_part *part_mbr;
+
+    part_mbr = &schem->s_mbr.mbr.partitions[index];
+
+    part_mbr->type = 0x83;
+}
+
+static pflag schem_part_is_used_mbr(const union schem *schem, pu32 index)
+{
+    return mbr_is_part_used(&schem->s_mbr.mbr.partitions[index]);
+}
+
+static void
+schem_get_info_mbr(const union schem *schem, const struct img_ctx *img_ctx,
+                   struct schem_info *info)
+{
+    info->first_usable_lba = byte_to_lba(img_ctx, mbr_sz, 1);
+    info->last_usable_lba = byte_to_lba(img_ctx, img_ctx->img_sz, 0);
+    info->part_cnt = ARRAY_SIZE(schem->s_mbr.mbr.partitions);
+}
+
+static pres schem_init_mbr(union schem *schem, const struct img_ctx *img_ctx)
+{
+    mbr_init_new(&schem->s_mbr.mbr);
+
+    return pres_ok;
+}
+
+/* === GPT === */
+
+static void schem_free_gpt(union schem *schem)
+{
+    struct schem_gpt *gpt;
+
+    gpt = &schem->s_gpt;
+
+    free(gpt->table_prim);
+    free(gpt->table_sec);
 }
 
 static enum schem_load_res
@@ -122,8 +190,6 @@ schem_load_gpt(struct schem_gpt *schem_gpt, const struct img_ctx *img_ctx)
         goto exit;
     }
 
-    printf("GPT detected\n");
-
     /* Primary GPT is ok, secondary GPT is corrupted */
     if(gpt_res_prim == gpt_load_ok && gpt_res_sec != gpt_load_ok) {
         printf("Secondary GPT is corrupted and will be restored on the next "
@@ -172,20 +238,6 @@ exit:
 }
 
 static void
-schem_part_set_mbr(union schem *schem, const struct img_ctx *img_ctx,
-                   pu32 index, const struct schem_part *part)
-{
-    struct mbr_part *part_mbr;
-
-    part_mbr = &schem->s_mbr.mbr.partitions[index];
-
-    part_mbr->start_lba = part->start_lba;
-    part_mbr->sz_lba = part->end_lba - part->start_lba + 1;
-    part_mbr->start_chs = lba_to_chs(img_ctx, part->start_lba);
-    part_mbr->end_chs = lba_to_chs(img_ctx, part->end_lba);
-}
-
-static void
 schem_part_set_gpt(union schem *schem, const struct img_ctx *img_ctx,
                    pu32 index, const struct schem_part *part)
 {
@@ -195,18 +247,6 @@ schem_part_set_gpt(union schem *schem, const struct img_ctx *img_ctx,
 
     part_gpt->start_lba = part->start_lba;
     part_gpt->end_lba = part->end_lba;
-}
-
-static void
-schem_part_get_mbr(const union schem *schem, pu32 index,
-                   struct schem_part *part)
-{
-    const struct mbr_part *part_mbr;
-
-    part_mbr = &schem->s_mbr.mbr.partitions[index];
-
-    part->start_lba = part_mbr->start_lba;
-    part->end_lba = part_mbr->start_lba + part_mbr->sz_lba - 1;
 }
 
 static void
@@ -221,15 +261,6 @@ schem_part_get_gpt(const union schem *schem, pu32 index,
     part->end_lba = part_gpt->end_lba;
 }
 
-static void schem_part_delete_mbr(union schem *schem, pu32 index)
-{
-    struct mbr_part *part_mbr;
-
-    part_mbr = &schem->s_mbr.mbr.partitions[index];
-
-    memset(part_mbr, 0, sizeof(*part_mbr));
-}
-
 static void schem_part_delete_gpt(union schem *schem, pu32 index)
 {
     struct gpt_part_ent *part_gpt;
@@ -237,15 +268,6 @@ static void schem_part_delete_gpt(union schem *schem, pu32 index)
     part_gpt = &schem->s_gpt.table_prim[index];
 
     memset(part_gpt, 0, sizeof(*part_gpt));
-}
-
-static void schem_part_new_mbr(union schem *schem, pu32 index)
-{
-    struct mbr_part *part_mbr;
-
-    part_mbr = &schem->s_mbr.mbr.partitions[index];
-
-    part_mbr->type = 0x83;
 }
 
 static void schem_part_new_gpt(union schem *schem, pu32 index)
@@ -258,23 +280,9 @@ static void schem_part_new_gpt(union schem *schem, pu32 index)
     part_gpt->type_guid = guid_linux_fs;
 }
 
-static pflag schem_part_is_used_mbr(const union schem *schem, pu32 index)
-{
-    return mbr_is_part_used(&schem->s_mbr.mbr.partitions[index]);
-}
-
 static pflag schem_part_is_used_gpt(const union schem *schem, pu32 index)
 {
     return gpt_is_part_used(&schem->s_gpt.table_prim[index]);
-}
-
-static void
-schem_get_info_mbr(const union schem *schem, const struct img_ctx *img_ctx,
-                   struct schem_info *info)
-{
-    info->first_usable_lba = byte_to_lba(img_ctx, mbr_sz, 1);
-    info->last_usable_lba = byte_to_lba(img_ctx, img_ctx->img_sz, 0);
-    info->part_cnt = ARRAY_SIZE(schem->s_mbr.mbr.partitions);
 }
 
 static void
@@ -305,13 +313,6 @@ static void schem_sync_gpt(union schem *schem)
     gpt_crc_fill_hdr(&gpt->hdr_sec);
 }
 
-static pres schem_init_mbr(union schem *schem, const struct img_ctx *img_ctx)
-{
-    mbr_init_new(&schem->s_mbr.mbr);
-
-    return pres_ok;
-}
-
 static pres schem_init_gpt(union schem *schem, const struct img_ctx *img_ctx)
 {
     struct schem_gpt *gpt;
@@ -332,6 +333,8 @@ static pres schem_init_gpt(union schem *schem, const struct img_ctx *img_ctx)
 
     return pres_ok;
 }
+
+/* === Common === */
 
 static void schem_map_funcs(struct schem_funcs *funcs, enum schem_type type)
 {
@@ -466,5 +469,54 @@ ok:
     schem_map_funcs(&schem_ctx->funcs, schem_ctx->type);
     schem_map_funcs_int(&schem_ctx->funcs_int, schem_ctx->type);
     return pres_ok;
+}
+
+pflag schem_check_overlap(const struct schem_ctx *schem_ctx, pu32 part_cnt,
+                          const struct schem_part *part1, pu32 *index)
+{
+    pu32 i;
+    struct schem_part part2;
+
+    for(i = 0; i < part_cnt; i++) {
+        if(i == *index) {
+            continue;
+        }
+
+        if(!schem_ctx->funcs.part_is_used(&schem_ctx->s, i)) {
+            continue;
+        }
+
+        schem_ctx->funcs.part_get(&schem_ctx->s, i, &part2);
+
+        /* Start LBA is inside of the partition */
+        if(
+            part1->start_lba >= part2.start_lba &&
+            part1->start_lba <= part2.end_lba
+        ) {
+            *index = i;
+            return 1;
+        }
+
+        /* End LBA is inside of the partition */
+        if(
+            part1->end_lba >= part2.start_lba &&
+            part1->end_lba <= part2.end_lba
+        ) {
+            *index = i;
+            return 1;
+        }
+
+        /* Partition is inside of the boundaries */
+        if(
+            part1->start_lba < part2.start_lba &&
+            part1->end_lba > part2.end_lba
+        ) {
+            *index = i;
+            return 1;
+        }
+    }
+
+    /* No overlap detected */
+    return 0;
 }
 

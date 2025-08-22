@@ -166,4 +166,7 @@ pres schem_change_type(struct schem_ctx *schem_ctx,
 
 pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx);
 
+pflag schem_check_overlap(const struct schem_ctx *schem_ctx, pu32 part_cnt,
+                          const struct schem_part *part1, pu32 *index);
+
 #endif
