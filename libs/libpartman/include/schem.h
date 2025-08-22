@@ -70,9 +70,14 @@ pu32 (*schem_func_get_part_cnt) (
 );
 
 typedef
+pflag (*schem_func_is_part_used) (
+    const union schem       *schem,
+    pu32                    index
+);
+
+typedef
 void (*schem_func_get_part) (
     const union schem       *schem,
-    const struct img_ctx    *img_ctx,
     pu32                    index,
     struct schem_part       *part
 );
@@ -83,6 +88,12 @@ void (*schem_func_set_part) (
     const struct img_ctx    *img_ctx,
     pu32                    index,
     const struct schem_part *part
+);
+
+typedef
+void (*schem_func_new_part) (
+    union schem             *schem,
+    pu32                    index
 );
 
 typedef
@@ -100,8 +111,10 @@ void (*schem_func_free) (
 struct schem_funcs {
     schem_func_sync sync;
     schem_func_get_part_cnt get_part_cnt;
-    schem_func_get_part get_part;
+    schem_func_is_part_used is_part_used;
     schem_func_set_part set_part;
+    schem_func_get_part get_part;
+    schem_func_new_part new_part;
     schem_func_save save;
 };
 
