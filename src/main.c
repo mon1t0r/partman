@@ -235,9 +235,7 @@ action_handle(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
 
         /* Write the partition table */
         case 'w':
-            if(schem_ctx->funcs.sync) {
-                schem_ctx->funcs.sync(&schem_ctx->s);
-            }
+            CALL_FUNC_NORET1(schem_ctx->funcs.sync, &schem_ctx->s);
             res = schem_ctx->funcs.save(&schem_ctx->s, img_ctx);
             break;
 

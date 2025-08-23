@@ -24,29 +24,6 @@ static pres schem_save_mbr(const union schem *schem,
     return mbr_save(&schem->s_mbr.mbr, img_ctx);
 }
 
-static pres schem_save_gpt(const union schem *schem,
-                           const struct img_ctx *img_ctx)
-{
-    const struct schem_gpt *gpt;
-    pres res;
-
-    gpt = &schem->s_gpt;
-
-    /* Protective MBR */
-    res = mbr_save(&gpt->mbr_prot.mbr, img_ctx);
-    if(!res) {
-        return pres_fail;
-    }
-
-    /* UEFI specification requires to update secondary GPT first */
-    res = gpt_save(&gpt->hdr_sec, gpt->table_sec, img_ctx);
-    if(!res) {
-        return pres_fail;
-    }
-
-    return gpt_save(&gpt->hdr_prim, gpt->table_prim, img_ctx);
-}
-
 static enum schem_load_res
 schem_load_mbr(struct schem_mbr *schem_mbr, const struct img_ctx *img_ctx)
 {
@@ -142,6 +119,29 @@ static void schem_free_gpt(union schem *schem)
     free(gpt->table_sec);
 }
 
+static pres schem_save_gpt(const union schem *schem,
+                           const struct img_ctx *img_ctx)
+{
+    const struct schem_gpt *gpt;
+    pres res;
+
+    gpt = &schem->s_gpt;
+
+    /* Protective MBR */
+    res = mbr_save(&gpt->mbr_prot.mbr, img_ctx);
+    if(!res) {
+        return pres_fail;
+    }
+
+    /* UEFI specification requires to update secondary GPT first */
+    res = gpt_save(&gpt->hdr_sec, gpt->table_sec, img_ctx);
+    if(!res) {
+        return pres_fail;
+    }
+
+    return gpt_save(&gpt->hdr_prim, gpt->table_prim, img_ctx);
+}
+
 static enum schem_load_res
 schem_load_gpt(struct schem_gpt *schem_gpt, const struct img_ctx *img_ctx)
 {
@@ -194,7 +194,6 @@ schem_load_gpt(struct schem_gpt *schem_gpt, const struct img_ctx *img_ctx)
     if(gpt_res_prim == gpt_load_ok && gpt_res_sec != gpt_load_ok) {
         printf("Secondary GPT is corrupted and will be restored on the next "
                "write\n");
-
 
         /* Secondary GPT table LBA */
         gpt_table_lba = schem_gpt->hdr_prim.alt_lba -
@@ -397,17 +396,13 @@ void schem_init(struct schem_ctx *schem_ctx)
 pres schem_change_type(struct schem_ctx *schem_ctx,
                        const struct img_ctx *img_ctx, enum schem_type type)
 {
-    if(schem_ctx->funcs_int.free) {
-        schem_ctx->funcs_int.free(&schem_ctx->s);
-    }
+    CALL_FUNC_NORET1(schem_ctx->funcs_int.free, &schem_ctx->s);
 
     schem_ctx->type = type;
     schem_map_funcs(&schem_ctx->funcs, type);
     schem_map_funcs_int(&schem_ctx->funcs_int, type);
 
-    if(schem_ctx->funcs_int.init) {
-        return schem_ctx->funcs_int.init(&schem_ctx->s, img_ctx);
-    }
+    CALL_FUNC_NORET2(schem_ctx->funcs_int.init, &schem_ctx->s, img_ctx);
 
     return pres_ok;
 }

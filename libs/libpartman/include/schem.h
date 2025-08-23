@@ -5,6 +5,26 @@
 #include "gpt.h"
 #include "img_ctx.h"
 
+/* Macro to be used on scheme functions, which may not be implemented */
+#define CALL_FUNC_NORET(func, args) \
+do {                          \
+    if(func) {                \
+        func args;            \
+    }                         \
+} while(0)
+
+#define CALL_FUNC_NORET1(func, arg1) \
+CALL_FUNC_NORET(func, (arg1))
+
+#define CALL_FUNC_NORET2(func, arg1, arg2) \
+CALL_FUNC_NORET(func, (arg1, arg2))
+
+#define CALL_FUNC_NORET3(func, arg1, arg2, arg3) \
+CALL_FUNC_NORET(func, (arg1, arg2, arg3))
+
+#define CALL_FUNC_NORET4(func, arg1, arg2, arg3, arg4) \
+CALL_FUNC_NORET(func, (arg1, arg2, arg3, arg4))
+
 /* === Scheme definitions === */
 
 /* MBR partitioning scheme */
@@ -126,6 +146,8 @@ typedef
 void (*schem_func_free) (
     union schem             *schem
 );
+
+/* Functions 'sync', 'init' and 'free' are not required to be implemented */
 
 /* Pointers to common scheme functions, which can be called from outside */
 struct schem_funcs {
