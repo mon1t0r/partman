@@ -195,7 +195,7 @@ pflag schem_check_overlap(const struct schem_ctx *schem_ctx, pu32 part_cnt,
 pres schem_calc_first_part(const struct schem_ctx *schem_ctx, pu32 *part_index,
                            pu32 part_cnt, pflag part_used);
 
-pres schem_calc_first_sector(const struct schem_ctx *schem_ctx,
+pres schem_calc_start_sector(const struct schem_ctx *schem_ctx,
                              const struct img_ctx *img_ctx, pu64 *lba,
                              const struct schem_info *info);
 

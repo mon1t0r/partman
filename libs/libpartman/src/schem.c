@@ -536,7 +536,7 @@ pres schem_calc_first_part(const struct schem_ctx *schem_ctx, pu32 *index,
     return pres_fail;
 }
 
-pres schem_calc_first_sector(const struct schem_ctx *schem_ctx,
+pres schem_calc_start_sector(const struct schem_ctx *schem_ctx,
                              const struct img_ctx *img_ctx, pu64 *lba,
                              const struct schem_info *info)
 {
@@ -558,36 +558,40 @@ pres schem_calc_first_sector(const struct schem_ctx *schem_ctx,
 
             schem_ctx->funcs.part_get(&schem_ctx->s, i, &part);
 
+            if(*lba < part.start_lba || *lba > part.end_lba) {
+                continue;
+            }
+
             /* If current LBA intersects with partition */
-            if(*lba >= part.start_lba && *lba <= part.end_lba) {
-                pos_changed = 1;
 
-                /* If there is no align LBA from previous iteration, test it */
-                if(lba_no_align != 0) {
-                    *lba = lba_no_align;
-                    lba_no_align = 0;
-                    break;
-                }
+            pos_changed = 1;
 
-                /* Set no align LBA in case aligned LBA will intersect */
-                lba_no_align = part.end_lba + 1;
-
-                /* If we reached the end of the usable space */
-                if(lba_no_align > info->last_usable_lba) {
-                    return pres_fail;
-                }
-
-                /* Set aligned LBA for next iteration */
-                *lba = lba_align(img_ctx, lba_no_align, 1);
-
-                /* If aligned LBA is after the end of usable space */
-                if(*lba > info->last_usable_lba) {
-                    *lba = lba_no_align;
-                    lba_no_align = 0;
-                }
-
+            /* If there is no align LBA from previous iteration, test it */
+            if(lba_no_align != 0) {
+                *lba = lba_no_align;
+                lba_no_align = 0;
                 break;
             }
+
+            /* Set no align LBA in case aligned LBA will intersect */
+            lba_no_align = part.end_lba + 1;
+
+            /* If we reached the end of the usable space */
+            if(lba_no_align > info->last_usable_lba) {
+                return pres_fail;
+            }
+
+            /* Set aligned LBA for next iteration */
+            *lba = lba_align(img_ctx, lba_no_align, 1);
+
+            /* If aligned LBA is after the end of usable space */
+            if(*lba > info->last_usable_lba) {
+                *lba = lba_no_align;
+                lba_no_align = 0;
+            }
+
+            /* Break internal cycle */
+            break;
         }
     } while(pos_changed);
 

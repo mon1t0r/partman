@@ -166,7 +166,7 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
                                      info.part_cnt, !is_new);
     if(!calc_res) {
         if(is_new) {
-            printf("No empty partitions left\n");
+            printf("No free partitions left\n");
         } else {
             printf("No used partitions found\n");
         }
@@ -192,9 +192,9 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
         return;
     }
 
-    calc_res = schem_calc_first_sector(schem_ctx, img_ctx, &lba_def, &info);
+    calc_res = schem_calc_start_sector(schem_ctx, img_ctx, &lba_def, &info);
     if(!calc_res) {
-        printf("Unable to find available first sector\n");
+        printf("Unable to find free start sector\n");
         return;
     }
 
