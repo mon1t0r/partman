@@ -117,13 +117,22 @@ static void schem_part_delete(struct schem_ctx *schem_ctx,
                               const struct img_ctx *img_ctx)
 {
     struct schem_info info;
+    pu32 part_index_def;
+    pres calc_res;
     pu32 part_index;
     enum scan_res scan_res;
 
     schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
+    calc_res = schem_calc_first_part(schem_ctx, &part_index_def,
+                                     info.part_cnt, 1);
+    if(!calc_res) {
+        printf("No used partitions found\n");
+        return;
+    }
+
     scan_res = scan_range_pu32("Partition number", &part_index,
-                               1, info.part_cnt, 1);
+                               1, info.part_cnt, part_index_def + 1);
     if(scan_res != scan_ok) {
         return;
     }
@@ -143,42 +152,69 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
                  pflag is_new)
 {
     struct schem_info info;
+    pu32 part_index_def;
+    pres calc_res;
     pu32 part_index;
     enum scan_res scan_res;
-    pflag part_used;
+    pflag is_part_used;
     struct schem_part part;
+    pu64 lba_def;
 
     schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
+    calc_res = schem_calc_first_part(schem_ctx, &part_index_def,
+                                     info.part_cnt, !is_new);
+    if(!calc_res) {
+        if(is_new) {
+            printf("No empty partitions left\n");
+        } else {
+            printf("No used partitions found\n");
+        }
+        return;
+    }
+
     scan_res = scan_range_pu32("Partition number", &part_index,
-                               1, info.part_cnt, 1);
+                               1, info.part_cnt, part_index_def + 1);
     if(scan_res != scan_ok) {
         return;
     }
 
     part_index--;
 
-    part_used = schem_ctx->funcs.part_is_used(&schem_ctx->s, part_index);
+    is_part_used = schem_ctx->funcs.part_is_used(&schem_ctx->s, part_index);
 
-    if(!is_new && !part_used) {
+    if(!is_new && !is_part_used) {
         printf("Partition is not in use\n");
         return;
     }
-    if(is_new && part_used) {
+    if(is_new && is_part_used) {
         printf("Partition already in use\n");
+        return;
+    }
+
+    calc_res = schem_calc_first_sector(schem_ctx, img_ctx, &lba_def, &info);
+    if(!calc_res) {
+        printf("Unable to find available first sector\n");
         return;
     }
 
     scan_res = scan_range_pu64("First sector", &part.start_lba,
                                info.first_usable_lba, info.last_usable_lba,
-                               info.first_usable_lba);
+                               lba_def);
     if(scan_res != scan_ok) {
+        return;
+    }
+
+    lba_def = part.start_lba;
+    calc_res = schem_calc_last_sector(schem_ctx, img_ctx, &lba_def, &info);
+    if(!calc_res) {
+        printf("Unable to find available last sector\n");
         return;
     }
 
     scan_res = scan_range_pu64("Last sector", &part.end_lba,
                                part.start_lba, info.last_usable_lba,
-                               part.start_lba);
+                               lba_def);
     if(scan_res != scan_ok) {
         return;
     }

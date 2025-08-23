@@ -29,7 +29,7 @@ pu64 lba_to_byte(const struct img_ctx *ctx, plba lba);
 
 plba byte_to_lba(const struct img_ctx *ctx, pu64 bytes, pflag round_up);
 
-plba lba_align(const struct img_ctx *ctx, plba lba);
+plba lba_align(const struct img_ctx *ctx, plba lba, pflag round_up);
 
 pchs lba_to_chs(const struct img_ctx *ctx, plba lba);
 

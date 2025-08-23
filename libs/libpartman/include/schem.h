@@ -85,6 +85,7 @@ struct schem_info {
     pu32 part_cnt;
 };
 
+/* Scheme function types */
 typedef
 pres (*schem_func_init) (
     union schem             *schem,
@@ -190,5 +191,16 @@ pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx);
 
 pflag schem_check_overlap(const struct schem_ctx *schem_ctx, pu32 part_cnt,
                           const struct schem_part *part1, pu32 *index);
+
+pres schem_calc_first_part(const struct schem_ctx *schem_ctx, pu32 *part_index,
+                           pu32 part_cnt, pflag part_used);
+
+pres schem_calc_first_sector(const struct schem_ctx *schem_ctx,
+                             const struct img_ctx *img_ctx, pu64 *lba,
+                             const struct schem_info *info);
+
+pres schem_calc_last_sector(const struct schem_ctx *schem_ctx,
+                            const struct img_ctx *img_ctx, pu64 *lba,
+                            const struct schem_info *info);
 
 #endif
