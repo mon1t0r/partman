@@ -10,10 +10,10 @@ void img_ctx_init(struct img_ctx *ctx, int img_fd, pu64 img_sz)
     ctx->img_sz = img_sz;
 
     /* Default values */
-    ctx->sec_sz = 512;         /* 512 bytes per sector   */
-    ctx->align  = 1024*1024*1; /* 1 MiB alignment        */
-    ctx->hpc    = 255;         /* 255 heads per cylinder */
-    ctx->spt    = 63;          /* 63 sectors per track   */
+    ctx->sec_sz = 512;                       /* 512 bytes per sector   */
+    ctx->align  = 1024*1024*1 / ctx->sec_sz; /* 1 MiB alignment        */
+    ctx->hpc    = 255;                       /* 255 heads per cylinder */
+    ctx->spt    = 63;                        /* 63 sectors per track   */
 }
 
 pu64 lba_to_byte(const struct img_ctx *ctx, plba lba)

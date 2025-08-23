@@ -10,10 +10,10 @@ struct img_ctx {
     /* Logical sector (block) size, in bytes */
     pu64 sec_sz;
 
-    /* Image size, in sectors */
+    /* Image size, in bytes */
     plba img_sz;
 
-    /* Partition alignment, in bytes */
+    /* Partition alignment, in sectors */
     pu64 align;
 
     /* Maximum logical number of heads per cylinder (max 255) */

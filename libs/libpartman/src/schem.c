@@ -623,9 +623,10 @@ pres schem_calc_last_sector(const struct schem_ctx *schem_ctx,
         return pres_fail;
     }
 
-    /* Check if LBA can be aligned */
     part.start_lba = *lba;
-    part.end_lba = lba_align(img_ctx, next_lba_bound, 0);
+    /* Minus 1 sector to get the end LBA of the previous alignment segment */
+    part.end_lba = lba_align(img_ctx, next_lba_bound, 0) - 1;
+    /* Check if LBA can be aligned */
     if(
         part.end_lba >= info->first_usable_lba &&
         !schem_check_overlap(schem_ctx, info->part_cnt, &part, NULL)
