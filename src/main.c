@@ -122,6 +122,11 @@ static void schem_part_delete(struct schem_ctx *schem_ctx,
     pu32 part_index;
     enum scan_res scan_res;
 
+    if(schem_ctx->type == schem_type_none) {
+        pprint("No partitioning scheme is present\n");
+        return;
+    }
+
     schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
     /* Find first used partition index */
@@ -160,6 +165,11 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
     pflag is_part_used;
     struct schem_part part;
     plba_res lba_def;
+
+    if(schem_ctx->type == schem_type_none) {
+        pprint("No partitioning scheme is present\n");
+        return;
+    }
 
     schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
@@ -350,29 +360,43 @@ img_init(struct img_ctx *img_ctx, const struct partman_opts *opts, int img_fd)
         return pres_fail;
     }
 
-    /* If image size is less, than required */
-    if(sz < opts->img_sz) {
-        /* Seek and write a single byte to ensure image size */
-        sz = lseek64(img_fd, opts->img_sz - 1, SEEK_SET);
-        if(sz == -1) {
-            perror("lseek64()");
-            return pres_fail;
-        }
+    plog_dbg("Image size is %lld", sz);
 
-        c = 0;
-        sz = write(img_fd, &c, 1);
-        if(sz == -1) {
-            perror("write()");
-            return pres_fail;
-        }
-
-        /* Now image size is equal to opts->img_sz */
-        sz = opts->img_sz;
+    if(sz >= opts->img_sz) {
+        goto init;
     }
 
+    /* If image size is less, than required */
+
+    plog_info("Image size (%lld) is less, than required by the "
+              "parameter (%lld). Image size will be extended now to match the "
+              "required size", sz, opts->img_sz);
+
+    /* Seek and write a single byte to ensure image size */
+    sz = lseek64(img_fd, opts->img_sz - 1, SEEK_SET);
+    if(sz == -1) {
+        perror("lseek64()");
+        return pres_fail;
+    }
+
+    c = 0;
+    sz = write(img_fd, &c, 1);
+    if(sz == -1) {
+        perror("write()");
+        return pres_fail;
+    }
+
+    /* Now image size is equal to opts->img_sz */
+    sz = opts->img_sz;
+
+    plog_dbg("Image size is extended to the required value");
+
+init:
     img_ctx_init(img_ctx, img_fd, sz);
 
-    return pres_ok;
+    img_ctx->sec_sz = opts->sec_sz;
+
+    return img_ctx_validate(img_ctx);
 }
 
 int main(int argc, char *const *argv)
@@ -410,7 +434,8 @@ int main(int argc, char *const *argv)
     res = img_init(&img_ctx, &opts, img_fd);
     if(!res) {
         plog_err("Failed to prepare image");
-        goto exit;
+        close(img_fd);
+        return EXIT_FAILURE;
     }
 
     /* Initialize scheme context */

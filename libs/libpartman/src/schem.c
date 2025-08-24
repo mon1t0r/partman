@@ -549,6 +549,12 @@ plba_res schem_find_start_sector(const struct schem_ctx *schem_ctx,
     lba_no_align = info->first_usable_lba;
     lba = lba_align(img_ctx, lba_no_align, 1);
 
+    /* If aligned LBA is after the end of usable space */
+    if(lba > info->last_usable_lba) {
+        lba = lba_no_align;
+        lba_no_align = 0;
+    }
+
     do {
         pos_changed = 0;
 
@@ -637,15 +643,20 @@ plba_res schem_find_last_sector(const struct schem_ctx *schem_ctx,
         return -1;
     }
 
-    part.start_lba = first_lba;
-    /* Minus 1 sector to get the end LBA of the previous alignment segment */
-    part.end_lba = lba_align(img_ctx, next_lba_bound, 0) - 1;
-
     /* Check if LBA can be aligned */
+    part.start_lba = first_lba;
+    part.end_lba = lba_align(img_ctx, next_lba_bound, 0);
+
+    /* Minus 1 sector to get the end LBA of the previous alignment segment */
+    if(part.end_lba > 0) {
+        part.end_lba--;
+    }
+
     if(
         part.end_lba >= info->first_usable_lba &&
         schem_find_overlap(schem_ctx, info->part_cnt, &part, -1) == -1
     ) {
+        printf("AA %llu %llu\n", first_lba, part.end_lba);
         /* Return aligned LBA */
         return part.end_lba;
     }

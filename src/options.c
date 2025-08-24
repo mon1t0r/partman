@@ -54,8 +54,8 @@ static pres opts_parse_pu64(const char *arg, pu64 *i_ptr)
 
 static void opts_init_default(struct partman_opts *opts)
 {
-    opts->log_level = log_info;
     opts->img_name = NULL;
+    opts->log_level = log_info;
     opts->sec_sz = 512;
     opts->img_sz = 0;
 }

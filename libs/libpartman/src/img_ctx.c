@@ -1,6 +1,12 @@
 #include <string.h>
 
 #include "img_ctx.h"
+#include "log.h"
+
+enum {
+    /* Minimum image size, in bytes - 512KiB */
+    img_min_sz = 1024*512
+};
 
 void img_ctx_init(struct img_ctx *ctx, int img_fd, pu64 img_sz)
 {
@@ -16,6 +22,28 @@ void img_ctx_init(struct img_ctx *ctx, int img_fd, pu64 img_sz)
     ctx->spt    = 63;                        /* 63 sectors per track   */
 }
 
+pres img_ctx_validate(const struct img_ctx *ctx)
+{
+    if(ctx->img_sz < img_min_sz) {
+        plog_err("Image size (%llu) is less, than minimum supported image "
+                 "size (%d)", ctx->img_sz, img_min_sz);
+        return pres_fail;
+    }
+
+    /* If sector size is less, than 512, greater, than 4096 or
+     * is not power of 2 */
+    if(
+        ctx->sec_sz < 512 || ctx->sec_sz > 4096 ||
+        (ctx->sec_sz & (ctx->sec_sz-1)) != 0
+    ) {
+        plog_err("Sector size %llu is not supported. Supported sizes are 512, "
+                 "1024, 2048, 4096", ctx->sec_sz);
+        return pres_fail;
+    }
+
+    return pres_ok;
+
+}
 pu64 lba_to_byte(const struct img_ctx *ctx, plba lba)
 {
     return lba * ctx->sec_sz;

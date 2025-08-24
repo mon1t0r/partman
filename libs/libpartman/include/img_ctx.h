@@ -25,6 +25,8 @@ struct img_ctx {
 
 void img_ctx_init(struct img_ctx *ctx, int img_fd, pu64 img_sz);
 
+pres img_ctx_validate(const struct img_ctx *ctx);
+
 pu64 lba_to_byte(const struct img_ctx *ctx, plba lba);
 
 plba byte_to_lba(const struct img_ctx *ctx, pu64 bytes, pflag round_up);
