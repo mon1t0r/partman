@@ -4,6 +4,9 @@
 #include "partman_types.h"
 
 struct img_ctx {
+    /* Image file name */
+    const char *img_name;
+
     /* Image file descriptor */
     int img_fd;
 
@@ -11,7 +14,7 @@ struct img_ctx {
     pu64 sec_sz;
 
     /* Image size, in bytes */
-    plba img_sz;
+    pu64 img_sz;
 
     /* Partition alignment, in sectors */
     pu64 align;
@@ -23,7 +26,8 @@ struct img_ctx {
     pu8 spt;
 };
 
-void img_ctx_init(struct img_ctx *ctx, int img_fd, pu64 img_sz);
+void img_ctx_init(struct img_ctx *ctx, const char *img_name, int img_fd,
+                  pu64 img_sz);
 
 pres img_ctx_validate(const struct img_ctx *ctx);
 
@@ -40,3 +44,4 @@ pchs chs_tuple_to_int(pchs c, pchs h, pchs s);
 void chs_int_to_tuple(pchs chs, pchs *c, pchs *h, pchs *s);
 
 #endif
+

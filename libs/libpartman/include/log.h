@@ -27,3 +27,4 @@ void plog_warn(const char *format, ...);
 void plog_err(const char *format, ...);
 
 #endif
+

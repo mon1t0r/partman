@@ -60,3 +60,4 @@ enum mbr_load_res mbr_load(struct mbr *mbr, const struct img_ctx *img_ctx);
 pres mbr_save(const struct mbr *mbr, const struct img_ctx *img_ctx);
 
 #endif
+

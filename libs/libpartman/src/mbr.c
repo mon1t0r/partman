@@ -6,6 +6,7 @@
 #include "mbr.h"
 #include "log.h"
 #include "memutils.h"
+#include "rand.h"
 
 enum {
     /* MBR boot signature */
@@ -75,9 +76,7 @@ void mbr_init_new(struct mbr *mbr)
 {
     memset(mbr, 0, sizeof(*mbr));
 
-    /* On some systems, 'int' may have width of 2 bytes  */
-    mbr->disk_sig = (((pu32) rand()) << 0 ) |
-                    (((pu32) rand()) << 16);
+    mbr->disk_sig = rand_32();
 }
 
 void mbr_init_protective(struct mbr *mbr, const struct img_ctx *img_ctx)

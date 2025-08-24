@@ -54,8 +54,14 @@ static pres opts_parse_pu64(const char *arg, pu64 *i_ptr)
 
 static void opts_init_default(struct partman_opts *opts)
 {
-    opts->img_name = NULL;
+    /* Default logging for debug build */
+#ifdef DEBUG
+    opts->log_level = log_debug;
+#else
     opts->log_level = log_info;
+#endif
+
+    opts->img_name = NULL;
     opts->sec_sz = 512;
     opts->img_sz = 0;
 }

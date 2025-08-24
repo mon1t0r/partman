@@ -18,3 +18,4 @@ prompt_range_pu64(const char *prompt, pu64 *int_ptr, pu64 start, pu64 end,
                   pu64 def);
 
 #endif
+

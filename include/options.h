@@ -14,3 +14,4 @@ struct partman_opts {
 pres opts_parse(struct partman_opts *opts, int argc, char * const *argv);
 
 #endif
+

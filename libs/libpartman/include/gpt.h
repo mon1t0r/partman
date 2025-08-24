@@ -109,3 +109,4 @@ enum gpt_load_res gpt_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],
 pres gpt_save(const struct gpt_hdr *hdr, const struct gpt_part_ent table[],
               const struct img_ctx *img_ctx);
 #endif
+

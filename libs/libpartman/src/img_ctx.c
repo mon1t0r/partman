@@ -8,10 +8,12 @@ enum {
     img_min_sz = 1024*512
 };
 
-void img_ctx_init(struct img_ctx *ctx, int img_fd, pu64 img_sz)
+void img_ctx_init(struct img_ctx *ctx, const char *img_name, int img_fd,
+                  pu64 img_sz)
 {
     memset(ctx, 0, sizeof(*ctx));
 
+    ctx->img_name = img_name;
     ctx->img_fd = img_fd;
     ctx->img_sz = img_sz;
 

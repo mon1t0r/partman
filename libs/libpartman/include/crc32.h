@@ -18,3 +18,4 @@ void crc32_compute64(pcrc32 *crc32, pu64 i);
 void crc32_finalize(pcrc32 *crc32);
 
 #endif
+

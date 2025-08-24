@@ -24,3 +24,4 @@ pu32 read_pu32(const pu8 *buf);
 pu64 read_pu64(const pu8 *buf);
 
 #endif
+

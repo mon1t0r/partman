@@ -27,3 +27,4 @@ pflag guid_is_zero(const struct guid *guid);
 void guid_to_str(char *buf, const struct guid *guid);
 
 #endif
+

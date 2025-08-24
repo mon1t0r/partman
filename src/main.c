@@ -44,7 +44,7 @@ static void schem_print_mbr(const struct schem_mbr *schem_mbr)
 
         pprint("Partition #%d\n", i + 1);
         pprint("|-Boot         %u\n", part->boot_ind);
-        pprint("|-Type         %u\n", part->type);
+        pprint("|-Type         0x%02x\n", part->type);
         pprint("|-Start LBA    %lu\n", part->start_lba);
         pprint("|-End LBA      %lu\n", part->start_lba + part->sz_lba - 1);
         pprint("|-Sectors      %lu\n", part->sz_lba);
@@ -97,8 +97,19 @@ static void schem_print_gpt(const struct schem_gpt *schem_gpt)
     }
 }
 
-static void schem_print(const struct schem_ctx *schem_ctx)
+static void schem_print_common(const struct img_ctx *img_ctx)
 {
+    pprint("Image '%s': %llu bytes, %llu sectors\n", img_ctx->img_name,
+           img_ctx->img_sz, byte_to_lba(img_ctx, img_ctx->img_sz, 0));
+    pprint("Units: sectors\n");
+    pprint("Sector size: %lu bytes\n", img_ctx->sec_sz);
+}
+
+static void schem_print(const struct schem_ctx *schem_ctx,
+                        const struct img_ctx *img_ctx)
+{
+    schem_print_common(img_ctx);
+
     switch(schem_ctx->type) {
         case schem_type_mbr:
             schem_print_mbr(&schem_ctx->s.s_mbr);
@@ -272,7 +283,7 @@ action_handle(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
 
         /* Print the partition table */
         case 'p':
-            schem_print(schem_ctx);
+            schem_print(schem_ctx, img_ctx);
             break;
 
         /* Add a new partition */
@@ -392,7 +403,7 @@ img_init(struct img_ctx *img_ctx, const struct partman_opts *opts, int img_fd)
     plog_dbg("Image size is extended to the required value");
 
 init:
-    img_ctx_init(img_ctx, img_fd, sz);
+    img_ctx_init(img_ctx, opts->img_name, img_fd, sz);
 
     img_ctx->sec_sz = opts->sec_sz;
 
