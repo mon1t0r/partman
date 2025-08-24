@@ -390,6 +390,9 @@ int main(int argc, char *const *argv)
         return EXIT_FAILURE;
     }
 
+    /* Set log level */
+    plog_set_level(opts.log_level);
+
     pprint("partman %s\n\n", PARTMAN_VER);
 
     /* Initialize random */
