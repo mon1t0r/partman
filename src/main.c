@@ -124,14 +124,16 @@ static void schem_part_delete(struct schem_ctx *schem_ctx,
 
     schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
+    /* Find first used partition index */
     part_index_def = schem_find_part_index(schem_ctx, info.part_cnt, 1);
     if(part_index_def == -1) {
         pprint("No used partitions found\n");
         return;
     }
 
-    scan_res = scan_range_pu32("Partition number", &part_index, 1,
-                               info.part_cnt, part_index_def + 1);
+    /* Get user input */
+    scan_res = prompt_range_pu32("Partition number", &part_index, 1,
+                                 info.part_cnt, part_index_def + 1);
     if(scan_res != scan_ok) {
         return;
     }
@@ -143,6 +145,7 @@ static void schem_part_delete(struct schem_ctx *schem_ctx,
         return;
     }
 
+    /* Delete partition */
     schem_ctx->funcs.part_delete(&schem_ctx->s, part_index);
 }
 
@@ -160,6 +163,7 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
 
     schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
+    /* Find first used/free partition index */
     part_index_res = schem_find_part_index(schem_ctx, info.part_cnt, !is_new);
     if(part_index_res == -1) {
         if(is_new) {
@@ -170,8 +174,9 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
         return;
     }
 
-    scan_res = scan_range_pu32("Partition number", &part_index, 1,
-                               info.part_cnt, part_index_res + 1);
+    /* Get user input */
+    scan_res = prompt_range_pu32("Partition number", &part_index, 1,
+                                 info.part_cnt, part_index_res + 1);
     if(scan_res != scan_ok) {
         return;
     }
@@ -180,28 +185,33 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
 
     is_part_used = schem_ctx->funcs.part_is_used(&schem_ctx->s, part_index);
 
+    /* If altering partition and partition is not used */
     if(!is_new && !is_part_used) {
         pprint("Partition is not in use\n");
         return;
     }
+    /* If creating new partition and partition is in use */
     if(is_new && is_part_used) {
         pprint("Partition already in use\n");
         return;
     }
 
+    /* Find start sector - ignore current partition */
     lba_def = schem_find_start_sector(schem_ctx, img_ctx, &info, part_index);
     if(lba_def == -1) {
         pprint("Unable to find free start sector\n");
         return;
     }
 
-    scan_res = scan_range_pu64("First sector", &part.start_lba,
-                               info.first_usable_lba, info.last_usable_lba,
-                               lba_def);
+    /* Get user input */
+    scan_res = prompt_range_pu64("First sector", &part.start_lba,
+                                 info.first_usable_lba, info.last_usable_lba,
+                                 lba_def);
     if(scan_res != scan_ok) {
         return;
     }
 
+    /* Find last sector - ignore current partition */
     lba_def = schem_find_last_sector(schem_ctx, img_ctx, &info, part_index,
                                      part.start_lba);
     if(lba_def == -1) {
@@ -209,17 +219,19 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
         return;
     }
 
-    scan_res = scan_range_pu64("Last sector", &part.end_lba,
-                               part.start_lba, info.last_usable_lba,
-                               lba_def);
+    /* Get user input */
+    scan_res = prompt_range_pu64("Last sector", &part.end_lba,
+                                 part.start_lba, info.last_usable_lba,
+                                 lba_def);
     if(scan_res != scan_ok) {
         return;
     }
 
+    /* Check if current partition overlaps with any other */
     part_index_res = schem_find_overlap(schem_ctx, info.part_cnt, &part,
                                         part_index);
     if(part_index_res >= 0) {
-        pprint("Overlap detected with partition #%lu\n", part_index_res + 1);
+        pprint("Overlap detected with partition #%ld\n", part_index_res + 1);
         return;
     }
 
@@ -258,7 +270,7 @@ action_handle(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
             schem_part_alter(schem_ctx, img_ctx, 1);
             break;
 
-        /* Resize a partition */
+        /* Create/resize a partition */
         case 'e':
             schem_part_alter(schem_ctx, img_ctx, 0);
             break;
@@ -301,7 +313,8 @@ routine_start(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
     enum action_res action_res;
 
     for(;;) {
-        scan_res = scan_char("Command (m for help)", &c);
+        pprint("Command (m for help): ");
+        scan_res = scan_char(&c);
 
         /* End of file */
         if(scan_res == scan_eof) {
