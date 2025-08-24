@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "schem.h"
+#include "log.h"
 #include "gpt.h"
 #include "img_ctx.h"
 #include "mbr.h"
@@ -31,7 +32,7 @@ schem_load_mbr(struct schem_mbr *schem_mbr, const struct img_ctx *img_ctx)
 
     mbr_res = mbr_load(&schem_mbr->mbr, img_ctx);
     if(mbr_res == mbr_load_fatal) {
-        fprintf(stderr, "An error occured while loading MBR\n");
+        plog_err("An error occured while loading MBR");
         return schem_load_fatal;
     }
 
@@ -162,7 +163,7 @@ schem_load_gpt(struct schem_gpt *schem_gpt, const struct img_ctx *img_ctx)
     gpt_res_prim = gpt_load(&schem_gpt->hdr_prim, schem_gpt->table_prim,
                             img_ctx, 1);
     if(gpt_res_prim == gpt_load_fatal) {
-        fprintf(stderr, "An error occured while loading primary GPT\n");
+        plog_err("Error while loading primary GPT");
         res = schem_load_fatal;
         goto exit;
     }
@@ -179,7 +180,7 @@ schem_load_gpt(struct schem_gpt *schem_gpt, const struct img_ctx *img_ctx)
     gpt_res_sec = gpt_load(&schem_gpt->hdr_sec, schem_gpt->table_sec,
                            img_ctx, gpt_lba_sec);
     if(gpt_res_sec == gpt_load_fatal) {
-        fprintf(stderr, "An error occured while loading secondary GPT\n");
+        plog_err("Error while loading secondary GPT");
         res = schem_load_fatal;
         goto exit;
     }
@@ -192,8 +193,8 @@ schem_load_gpt(struct schem_gpt *schem_gpt, const struct img_ctx *img_ctx)
 
     /* Primary GPT is ok, secondary GPT is corrupted */
     if(gpt_res_prim == gpt_load_ok && gpt_res_sec != gpt_load_ok) {
-        printf("Secondary GPT is corrupted and will be restored on the next "
-               "write\n");
+        plog_info("Secondary GPT is corrupted and will be restored on the "
+                  "next write");
 
         /* Secondary GPT table LBA */
         gpt_table_lba = schem_gpt->hdr_prim.alt_lba -
@@ -210,8 +211,8 @@ schem_load_gpt(struct schem_gpt *schem_gpt, const struct img_ctx *img_ctx)
 
     /* Primary GPT is corrupted, secondary GPT is ok */
     if(gpt_res_prim != gpt_load_ok && gpt_res_sec == gpt_load_ok) {
-        printf("Primary GPT is corrupted and will be restored on the next "
-               "write\n");
+        plog_info("Primary GPT is corrupted and will be restored on the "
+                  "next write");
 
         /* Primary GPT table LBA */
         gpt_table_lba = schem_gpt->hdr_sec.alt_lba + 1;
@@ -435,17 +436,22 @@ pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
 
     /* GPT is detected and loaded */
     if(load_res_gpt == schem_load_ok) {
+        plog_dbg("GPT detected");
+
         memcpy(&schem_ctx->s.s_gpt, &schem_gpt, sizeof(schem_gpt));
 
         if(load_res_mbr == schem_load_ok) {
+            plog_dbg("Protective MBR detected");
+
             /* Protective MBR is detected and loaded */
             memcpy(&schem_ctx->s.s_gpt.mbr_prot, &schem_mbr,
                    sizeof(schem_mbr));
         } else {
+            plog_info("Protective MBR not found and will be created on the "
+                      "next write");
+
             /* Initialize new protective MBR */
             mbr_init_protective(&schem_ctx->s.s_mbr.mbr, img_ctx);
-            printf("Protective MBR not found and will be created on the next "
-                   "write\n");
         }
 
         schem_ctx->type = schem_type_gpt;
@@ -454,6 +460,8 @@ pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
 
     /* MBR is detected and loaded */
     if(load_res_mbr == schem_load_ok) {
+        plog_dbg("MBR detected");
+
         memcpy(&schem_ctx->s.s_mbr, &schem_mbr, sizeof(schem_mbr));
 
         schem_ctx->type = schem_type_mbr;

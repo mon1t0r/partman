@@ -2,6 +2,7 @@
 #include <stddef.h>
 
 #include "crc32.h"
+#include "log.h"
 
 /* Initialized to 0s */
 static pcrc32 crc_table[256];
@@ -19,6 +20,8 @@ static void crc32_init_table(void)
             crc_table[i + j] = crc32 ^ crc_table[j];
         }
     }
+
+    plog_dbg("CRC32 table generated");
 }
 
 pcrc32 crc32_init(void)
@@ -68,3 +71,4 @@ void crc32_compute64(pcrc32 *crc32, pu64 i)
     crc32_compute8(crc32, (i >> 48) & 0xFF);
     crc32_compute8(crc32, (i >> 56) & 0xFF);
 }
+

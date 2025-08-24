@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "scan.h"
+#include "log.h"
 
 enum {
     /* Scan buffer size, in bytes */
@@ -41,7 +42,7 @@ enum scan_res scan_char(const char *prompt, char *c)
     char buf[scan_buf_sz];
     char *s;
 
-    printf("%s: ", prompt);
+    pprint("%s: ", prompt);
 
     s = fgets(buf, sizeof(buf), stdin);
 
@@ -67,13 +68,13 @@ enum scan_res scan_char(const char *prompt, char *c)
 
 enum scan_res scan_pu32(const char *prompt, pu32 *int_ptr)
 {
-    printf("%s: ", prompt);
+    pprint("%s: ", prompt);
     return scan_int("%lu", int_ptr);
 }
 
 enum scan_res scan_pu64(const char *prompt, pu64 *int_ptr)
 {
-    printf("%s: ", prompt);
+    pprint("%s: ", prompt);
     return scan_int("%llu", int_ptr);
 }
 
@@ -82,7 +83,7 @@ enum scan_res scan_range_pu32(const char *prompt, pu32 *int_ptr, pu32 start,
 {
     enum scan_res res;
 
-    printf("%s (%ld-%ld, default %ld): ", prompt, start, end, def);
+    pprint("%s (%ld-%ld, default %ld): ", prompt, start, end, def);
 
     res = scan_int("%lu", int_ptr);
 
@@ -96,7 +97,7 @@ enum scan_res scan_range_pu32(const char *prompt, pu32 *int_ptr, pu32 start,
     }
 
     if(*int_ptr < start || *int_ptr > end) {
-        fprintf(stderr, "Value is out of range\n");
+        pprint("Value is out of range\n");
         return scan_fail;
     }
 
@@ -108,7 +109,7 @@ enum scan_res scan_range_pu64(const char *prompt, pu64 *int_ptr, pu64 start,
 {
     enum scan_res res;
 
-    printf("%s (%lld-%lld, default %lld): ", prompt, start, end, def);
+    pprint("%s (%lld-%lld, default %lld): ", prompt, start, end, def);
 
     res = scan_int("%lu", int_ptr);
 
@@ -122,7 +123,7 @@ enum scan_res scan_range_pu64(const char *prompt, pu64 *int_ptr, pu64 start,
     }
 
     if(*int_ptr < start || *int_ptr > end) {
-        fprintf(stderr, "Value is out of range\n");
+        pprint("Value is out of range\n");
         return scan_fail;
     }
 

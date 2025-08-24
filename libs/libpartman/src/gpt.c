@@ -5,6 +5,7 @@
 #include <sys/mman.h>
 
 #include "gpt.h"
+#include "log.h"
 #include "img_ctx.h"
 #include "memutils.h"
 #include "crc32.h"
@@ -178,8 +179,8 @@ static void gpt_part_ent_write(pu8 *buf, const struct gpt_part_ent *entry)
     guid_write(buf + 16, &entry->unique_guid);
 
     write_pu64(buf + 32, entry->start_lba);
-    write_pu64(buf + 40, entry->end_lba  );
-    write_pu64(buf + 48, entry->attr     );
+    write_pu64(buf + 40, entry->end_lba);
+    write_pu64(buf + 48, entry->attr);
 
     for(i = 0; i < ARRAY_SIZE(entry->name); i++) {
         write_pu16(buf + 56 + i, entry->name[i]);
@@ -197,8 +198,8 @@ static void gpt_part_ent_read(const pu8 *buf, struct gpt_part_ent *entry)
     guid_read(buf + 16, &entry->unique_guid);
 
     entry->start_lba = read_pu64(buf + 32);
-    entry->end_lba = read_pu64(buf + 40);
-    entry->attr = read_pu64(buf + 48);
+    entry->end_lba   = read_pu64(buf + 40);
+    entry->attr      = read_pu64(buf + 48);
 
     for(i = 0; i < ARRAY_SIZE(entry->name); i++) {
         entry->name[i] = read_pu16(buf + 56 + i);
@@ -250,7 +251,7 @@ void gpt_init_new(struct gpt_hdr *hdr_prim, struct gpt_hdr *hdr_sec,
 
 void gpt_hdr_read(const pu8 *buf, struct gpt_hdr *hdr)
 {
-    hdr->rev       = read_pu32(buf + 8 );
+    hdr->rev       = read_pu32(buf + 8);
     hdr->hdr_sz    = read_pu32(buf + 12);
     hdr->hdr_crc32 = read_pu32(buf + 16);
 
@@ -279,25 +280,25 @@ void gpt_hdr_write(pu8 *buf, const struct gpt_hdr *hdr)
         write_pu8(buf + i, GPT_SIG[i]);
     }
 
-    write_pu32(buf + 8,  hdr->rev      );
-    write_pu32(buf + 12, hdr->hdr_sz   );
+    write_pu32(buf + 8,  hdr->rev);
+    write_pu32(buf + 12, hdr->hdr_sz);
     write_pu32(buf + 16, hdr->hdr_crc32);
 
     /* Reserved, 4 bytes */
     write_pu32(buf + 20, 0);
 
-    write_pu64(buf + 24, hdr->my_lba          );
-    write_pu64(buf + 32, hdr->alt_lba         );
+    write_pu64(buf + 24, hdr->my_lba);
+    write_pu64(buf + 32, hdr->alt_lba);
     write_pu64(buf + 40, hdr->first_usable_lba);
-    write_pu64(buf + 48, hdr->last_usable_lba );
+    write_pu64(buf + 48, hdr->last_usable_lba);
 
     /* Disk GUID */
     guid_write(buf + 56, &hdr->disk_guid);
 
-    write_pu64(buf + 72, hdr->part_table_lba      );
+    write_pu64(buf + 72, hdr->part_table_lba);
     write_pu32(buf + 80, hdr->part_table_entry_cnt);
-    write_pu32(buf + 84, hdr->part_entry_sz       );
-    write_pu32(buf + 88, hdr->part_table_crc32    );
+    write_pu32(buf + 84, hdr->part_entry_sz);
+    write_pu32(buf + 88, hdr->part_table_crc32);
 }
 
 void gpt_table_write(pu8 *buf, const struct gpt_part_ent table[],
@@ -389,8 +390,7 @@ enum gpt_load_res gpt_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],
     /* Map GPT header sector */
     hdr_reg = map_secs(img_ctx, hdr_lba, hdr_sz_secs);
     if(hdr_reg == NULL) {
-        fprintf(stderr, "Failed to map image GPT header at LBA %llu\n",
-                hdr_lba);
+        plog_err("Failed to map GPT header at sector %llu", hdr_lba);
         load_res = gpt_load_fatal;
         goto exit;
     }
@@ -418,8 +418,7 @@ enum gpt_load_res gpt_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],
     /* Map GPT table sectors */
     table_reg = map_secs(img_ctx, table_lba, table_sz_secs);
     if(table_reg == NULL) {
-        fprintf(stderr, "Failed to map image GPT table at LBA %llu\n",
-                table_lba);
+        plog_err("Failed to map GPT table at sector %llu", table_lba);
         load_res = gpt_load_fatal;
         goto exit;
     }
@@ -434,6 +433,8 @@ enum gpt_load_res gpt_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],
         goto exit;
     }
 
+    plog_dbg("Loaded GPT: header %llu, table %llu", hdr_lba, table_lba);
+
     /* Loaded successfully */
     load_res = gpt_load_ok;
 
@@ -442,8 +443,7 @@ exit:
     if(hdr_reg) {
         res = unmap_secs(hdr_reg, img_ctx, hdr_lba, hdr_sz_secs);
         if(!res) {
-            fprintf(stderr, "Failed to unmap image GPT header at LBA "
-                    "%llu\n", hdr_lba);
+            plog_err("Failed to unmap GPT header at sector %llu", hdr_lba);
             return gpt_load_fatal;
         }
     }
@@ -452,8 +452,7 @@ exit:
     if(table_reg) {
         res = unmap_secs(table_reg, img_ctx, table_lba, table_sz_secs);
         if(!res) {
-            fprintf(stderr, "Failed to unmap image GPT table at LBA "
-                    "%llu\n", table_lba);
+            plog_err("Failed to unmap GPT table at sector %llu", table_lba);
             return gpt_load_fatal;
         }
     }
@@ -480,8 +479,7 @@ pres gpt_save(const struct gpt_hdr *hdr, const struct gpt_part_ent table[],
     /* Map GPT header sector */
     hdr_reg = map_secs(img_ctx, hdr_lba, hdr_sz_secs);
     if(hdr_reg == NULL) {
-        fprintf(stderr, "Failed to map image GPT header at LBA %llu\n",
-                hdr_lba);
+        plog_err("Failed to map GPT header at sector %llu", hdr_lba);
         save_res = pres_fail;
         goto exit;
     }
@@ -497,8 +495,7 @@ pres gpt_save(const struct gpt_hdr *hdr, const struct gpt_part_ent table[],
     /* Map GPT table sectors */
     table_reg = map_secs(img_ctx, table_lba, table_sz_secs);
     if(table_reg == NULL) {
-        fprintf(stderr, "Failed to map image GPT table at LBA %llu\n",
-                table_lba);
+        plog_err("Failed to map GPT table at sector %llu", table_lba);
         save_res = pres_fail;
         goto exit;
     }
@@ -506,6 +503,8 @@ pres gpt_save(const struct gpt_hdr *hdr, const struct gpt_part_ent table[],
     /* Write GPT table */
     gpt_table_write(table_reg, table, hdr->part_table_entry_cnt,
                     hdr->part_entry_sz);
+
+    plog_dbg("Saved GPT: header %llu, table %llu", hdr_lba, table_lba);
 
     /* Saved successfully */
     save_res = pres_ok;
@@ -515,8 +514,7 @@ exit:
     if(hdr_reg) {
         res = unmap_secs(hdr_reg, img_ctx, hdr_lba, hdr_sz_secs);
         if(!res) {
-            fprintf(stderr, "Failed to unmap image GPT header at LBA "
-                    "%llu\n", hdr_lba);
+            plog_err("Failed to unmap GPT header at sector %llu", hdr_lba);
             return pres_fail;
         }
     }
@@ -525,8 +523,7 @@ exit:
     if(table_reg) {
         res = unmap_secs(table_reg, img_ctx, table_lba, table_sz_secs);
         if(!res) {
-            fprintf(stderr, "Failed to unmap image GPT table at LBA "
-                    "%llu\n", table_lba);
+            plog_err("Failed to unmap GPT table at sector %llu", table_lba);
             return pres_fail;
         }
     }

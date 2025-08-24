@@ -51,7 +51,7 @@ void guid_read(const pu8 *buf, struct guid *guid)
 {
     int i;
 
-    guid->time_lo       = read_pu32(buf    );
+    guid->time_lo       = read_pu32(buf);
     guid->time_mid      = read_pu16(buf + 4);
     guid->time_hi_ver   = read_pu16(buf + 6);
     guid->cl_seq_hi_res = read_pu8 (buf + 8);
@@ -66,11 +66,11 @@ void guid_write(pu8 *buf, const struct guid *guid)
 {
     int i;
 
-    write_pu32(buf,     guid->time_lo      );
-    write_pu16(buf + 4, guid->time_mid     );
-    write_pu16(buf + 6, guid->time_hi_ver  );
+    write_pu32(buf,     guid->time_lo);
+    write_pu16(buf + 4, guid->time_mid);
+    write_pu16(buf + 6, guid->time_hi_ver);
     write_pu8 (buf + 8, guid->cl_seq_hi_res);
-    write_pu8 (buf + 9, guid->cl_seq_lo    );
+    write_pu8 (buf + 9, guid->cl_seq_lo);
 
     for(i = 0; i < ARRAY_SIZE(guid->node); i++) {
         write_pu8(buf + 10 + i, guid->node[i]);

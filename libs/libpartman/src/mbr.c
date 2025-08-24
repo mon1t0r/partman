@@ -4,6 +4,7 @@
 #include <sys/mman.h>
 
 #include "mbr.h"
+#include "log.h"
 #include "memutils.h"
 
 enum {
@@ -52,21 +53,21 @@ static pres mbr_unmap(pu8 *reg, const struct img_ctx *img_ctx)
 
 static void mbr_part_write(pu8 *buf, const struct mbr_part *mbr_part)
 {
-    write_pu8 (buf,      mbr_part->boot_ind );
+    write_pu8 (buf,      mbr_part->boot_ind);
     write_pu24(buf + 1,  mbr_part->start_chs);
-    write_pu8 (buf + 4,  mbr_part->type     );
-    write_pu24(buf + 5,  mbr_part->end_chs  );
+    write_pu8 (buf + 4,  mbr_part->type);
+    write_pu24(buf + 5,  mbr_part->end_chs);
     write_pu32(buf + 8,  mbr_part->start_lba);
-    write_pu32(buf + 12, mbr_part->sz_lba   );
+    write_pu32(buf + 12, mbr_part->sz_lba);
 }
 
 static void mbr_part_read(const pu8 *buf, struct mbr_part *mbr_part)
 {
-    mbr_part->boot_ind  = read_pu8 (buf     );
-    mbr_part->start_chs = read_pu24(buf + 1 );
-    mbr_part->type      = read_pu8 (buf + 4 );
-    mbr_part->end_chs   = read_pu24(buf + 5 );
-    mbr_part->start_lba = read_pu32(buf + 8 );
+    mbr_part->boot_ind  = read_pu8 (buf);
+    mbr_part->start_chs = read_pu24(buf + 1);
+    mbr_part->type      = read_pu8 (buf + 4);
+    mbr_part->end_chs   = read_pu24(buf + 5);
+    mbr_part->start_lba = read_pu32(buf + 8);
     mbr_part->sz_lba    = read_pu32(buf + 12);
 }
 
@@ -151,7 +152,7 @@ enum mbr_load_res mbr_load(struct mbr *mbr, const struct img_ctx *img_ctx)
     /* Map MBR sector */
     reg = mbr_map(img_ctx);
     if(reg == NULL) {
-        fprintf(stderr, "Failed to map image MBR\n");
+        plog_err("Failed to map image MBR");
         return mbr_load_fatal;
     }
 
@@ -166,7 +167,7 @@ enum mbr_load_res mbr_load(struct mbr *mbr, const struct img_ctx *img_ctx)
     /* Unmap MBR sector */
     res = mbr_unmap(reg, img_ctx);
     if(!res) {
-        fprintf(stderr, "Failed to unmap image MBR\n");
+        plog_err("Failed to unmap image MBR");
         return mbr_load_fatal;
     }
 
@@ -181,7 +182,7 @@ pres mbr_save(const struct mbr *mbr, const struct img_ctx *img_ctx)
     /* Map MBR sector */
     reg = mbr_map(img_ctx);
     if(reg == NULL) {
-        fprintf(stderr, "Failed to map image MBR\n");
+        plog_err("Failed to map image MBR");
         return pres_fail;
     }
 
@@ -191,7 +192,7 @@ pres mbr_save(const struct mbr *mbr, const struct img_ctx *img_ctx)
     /* Unmap MBR sector */
     res = mbr_unmap(reg, img_ctx);
     if(!res) {
-        fprintf(stderr, "Failed to unmap image MBR\n");
+        plog_err("Failed to unmap image MBR");
         return pres_fail;
     }
 

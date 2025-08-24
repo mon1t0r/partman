@@ -9,6 +9,7 @@
 
 #include "partman_types.h"
 #include "options.h"
+#include "log.h"
 #include "img_ctx.h"
 #include "scan.h"
 #include "schem.h"
@@ -28,10 +29,10 @@ static void schem_print_mbr(const struct schem_mbr *schem_mbr)
 
     mbr = &schem_mbr->mbr;
 
-    printf("Partitioning scheme: MBR\n");
-    printf("Disk identifier: 0x%08lx\n\n", mbr->disk_sig);
+    pprint("Partitioning scheme: MBR\n");
+    pprint("Disk identifier: 0x%08lx\n\n", mbr->disk_sig);
 
-    printf("=== Partitions ===\n");
+    pprint("=== Partitions ===\n");
 
     for(i = 0; i < ARRAY_SIZE(mbr->partitions); i++) {
         part = &mbr->partitions[i];
@@ -41,18 +42,18 @@ static void schem_print_mbr(const struct schem_mbr *schem_mbr)
             continue;
         }
 
-        printf("Partition #%d\n", i + 1);
-        printf("|-Boot         %u\n", part->boot_ind);
-        printf("|-Type         %u\n", part->type);
-        printf("|-Start LBA    %lu\n", part->start_lba);
-        printf("|-End LBA      %lu\n", part->start_lba + part->sz_lba - 1);
-        printf("|-Sectors      %lu\n", part->sz_lba);
+        pprint("Partition #%d\n", i + 1);
+        pprint("|-Boot         %u\n", part->boot_ind);
+        pprint("|-Type         %u\n", part->type);
+        pprint("|-Start LBA    %lu\n", part->start_lba);
+        pprint("|-End LBA      %lu\n", part->start_lba + part->sz_lba - 1);
+        pprint("|-Sectors      %lu\n", part->sz_lba);
 
         chs_int_to_tuple(part->start_chs, &c, &h, &s);
-        printf("|-Start C/H/S  %03lu/%03lu/%03lu\n", c, h, s);
+        pprint("|-Start C/H/S  %03lu/%03lu/%03lu\n", c, h, s);
 
         chs_int_to_tuple(part->end_chs, &c, &h, &s);
-        printf("|-End C/H/S    %03lu/%03lu/%03lu\n\n", c, h, s);
+        pprint("|-End C/H/S    %03lu/%03lu/%03lu\n\n", c, h, s);
     }
 }
 
@@ -65,12 +66,12 @@ static void schem_print_gpt(const struct schem_gpt *schem_gpt)
 
     hdr = &schem_gpt->hdr_prim;
 
-    printf("Partitioning scheme: GPT\n");
+    pprint("Partitioning scheme: GPT\n");
 
     guid_to_str(buf, &hdr->disk_guid);
-    printf("Disk identifier: %s\n\n", buf);
+    pprint("Disk identifier: %s\n\n", buf);
 
-    printf("=== Partitions === \n");
+    pprint("=== Partitions === \n");
 
     for(i = 0; i < hdr->part_table_entry_cnt; i++) {
         part = &schem_gpt->table_prim[i];
@@ -80,17 +81,17 @@ static void schem_print_gpt(const struct schem_gpt *schem_gpt)
             continue;
         }
 
-        printf("Partition #%d\n", i + 1);
+        pprint("Partition #%d\n", i + 1);
 
         guid_to_str(buf, &part->unique_guid);
-        printf("|-Id          %s\n", buf);
+        pprint("|-Id          %s\n", buf);
 
         guid_to_str(buf, &part->type_guid);
-        printf("|-Type        %s\n", buf);
+        pprint("|-Type        %s\n", buf);
 
-        printf("|-Start LBA   %llu\n", part->start_lba);
-        printf("|-End LBA     %llu\n", part->end_lba);
-        printf("|-Sectors     %llu\n", part->end_lba - part->start_lba + 1);
+        pprint("|-Start LBA   %llu\n", part->start_lba);
+        pprint("|-End LBA     %llu\n", part->end_lba);
+        pprint("|-Sectors     %llu\n", part->end_lba - part->start_lba + 1);
 
         /* TODO: Print partition name */
     }
@@ -108,7 +109,7 @@ static void schem_print(const struct schem_ctx *schem_ctx)
             break;
 
         case schem_type_none:
-            printf("Partitioning scheme: None\n");
+            pprint("Partitioning scheme: None\n");
             break;
     }
 }
@@ -127,7 +128,7 @@ static void schem_part_delete(struct schem_ctx *schem_ctx,
     calc_res = schem_calc_first_part(schem_ctx, &part_index_def,
                                      info.part_cnt, 1);
     if(!calc_res) {
-        printf("No used partitions found\n");
+        pprint("No used partitions found\n");
         return;
     }
 
@@ -140,7 +141,7 @@ static void schem_part_delete(struct schem_ctx *schem_ctx,
     part_index--;
 
     if(!schem_ctx->funcs.part_is_used(&schem_ctx->s, part_index)) {
-        printf("Partition is not in use\n");
+        pprint("Partition is not in use\n");
         return;
     }
 
@@ -166,9 +167,9 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
                                      info.part_cnt, !is_new);
     if(!calc_res) {
         if(is_new) {
-            printf("No free partitions left\n");
+            pprint("No free partitions left\n");
         } else {
-            printf("No used partitions found\n");
+            pprint("No used partitions found\n");
         }
         return;
     }
@@ -184,17 +185,17 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
     is_part_used = schem_ctx->funcs.part_is_used(&schem_ctx->s, part_index);
 
     if(!is_new && !is_part_used) {
-        printf("Partition is not in use\n");
+        pprint("Partition is not in use\n");
         return;
     }
     if(is_new && is_part_used) {
-        printf("Partition already in use\n");
+        pprint("Partition already in use\n");
         return;
     }
 
     calc_res = schem_calc_start_sector(schem_ctx, img_ctx, &lba_def, &info);
     if(!calc_res) {
-        printf("Unable to find free start sector\n");
+        pprint("Unable to find free start sector\n");
         return;
     }
 
@@ -208,7 +209,7 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
     lba_def = part.start_lba;
     calc_res = schem_calc_last_sector(schem_ctx, img_ctx, &lba_def, &info);
     if(!calc_res) {
-        printf("Unable to find available last sector\n");
+        pprint("Unable to find available last sector\n");
         return;
     }
 
@@ -220,7 +221,7 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
     }
 
     if(schem_check_overlap(schem_ctx, info.part_cnt, &part, &part_index)) {
-        printf("Overlap detected with partition #%lu\n", part_index + 1);
+        pprint("Overlap detected with partition #%lu\n", part_index + 1);
         return;
     }
 
@@ -246,7 +247,7 @@ action_handle(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
 
         /* Help */
         case 'm':
-            printf("*help should be here*\n");
+            pprint("*help should be here*\n");
             break;
 
         /* Print the partition table */
@@ -287,7 +288,7 @@ action_handle(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
 
         /* Unknown */
         default:
-            printf("Unknown command\n");
+            pprint("Unknown command\n");
             break;
     }
 
@@ -306,7 +307,7 @@ routine_start(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
 
         /* End of file */
         if(scan_res == scan_eof) {
-            printf("\n");
+            pprint("\n");
             return pres_ok;
         }
 
@@ -317,7 +318,7 @@ routine_start(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
 
         action_res = action_handle(schem_ctx, img_ctx, c);
         if(action_res == action_continue) {
-            printf("\n");
+            pprint("\n");
             continue;
         }
 
@@ -378,7 +379,7 @@ int main(int argc, char *const *argv)
         return EXIT_FAILURE;
     }
 
-    printf("partman %s\n\n", PARTMAN_VER);
+    pprint("partman %s\n\n", PARTMAN_VER);
 
     /* Initialize random */
     srand(time(NULL));
@@ -387,14 +388,14 @@ int main(int argc, char *const *argv)
     img_fd = open(opts.img_name, O_RDWR|O_CREAT, 0666);
     if(img_fd == -1) {
         perror("open()");
-        fprintf(stderr, "Unable to open %s\n", opts.img_name);
+        plog_err("Unable to open %s", opts.img_name);
         return EXIT_FAILURE;
     }
 
     /* Initialize image context */
     res = img_init(&img_ctx, &opts, img_fd);
     if(!res) {
-        fprintf(stderr, "Failed to prepare image\n");
+        plog_err("Failed to prepare image");
         goto exit;
     }
 
@@ -404,7 +405,7 @@ int main(int argc, char *const *argv)
     /* Load schemes, which are present in image */
     res = schem_load(&schem_ctx, &img_ctx);
     if(!res) {
-        fprintf(stderr, "Failed to load schemes from image\n");
+        plog_err("Failed to load schemes from image");
         goto exit;
     }
 

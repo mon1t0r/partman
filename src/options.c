@@ -3,6 +3,7 @@
 #include <getopt.h>
 
 #include "options.h"
+#include "log.h"
 
 static const char msg_err[] =
     "Usage: %s [OPTION]... [IMG_FILE]\n(%s)\n";
@@ -17,7 +18,7 @@ static const char opt_str[] = "b:m:";
 
 static void opts_err(const char *exec_name, const char *reason)
 {
-    fprintf(stderr, msg_err, exec_name, reason);
+    pprint(msg_err, exec_name, reason);
 }
 
 static pres opts_parse_pu64(const char *arg, pu64 *i_ptr)
