@@ -38,7 +38,7 @@ void crc32_finalize(pcrc32 *crc32)
 
 void crc32_compute8(pcrc32 *crc32, pu8 i)
 {
-    if(crc_table[0] == 0) {
+    if(crc_table[255] == 0) {
         crc32_init_table();
     }
 

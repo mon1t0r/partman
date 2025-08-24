@@ -189,18 +189,19 @@ pres schem_change_type(struct schem_ctx *schem_ctx,
 
 pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx);
 
-pflag schem_check_overlap(const struct schem_ctx *schem_ctx, pu32 part_cnt,
-                          const struct schem_part *part1, pu32 *index);
+p32 schem_find_overlap(const struct schem_ctx *schem_ctx, pu32 part_cnt,
+                       const struct schem_part *part, p32 part_ign);
 
-pres schem_calc_first_part(const struct schem_ctx *schem_ctx, pu32 *part_index,
-                           pu32 part_cnt, pflag part_used);
+p32 schem_find_part_index(const struct schem_ctx *schem_ctx, pu32 part_cnt,
+                          pflag part_used);
 
-pres schem_calc_start_sector(const struct schem_ctx *schem_ctx,
-                             const struct img_ctx *img_ctx, pu64 *lba,
-                             const struct schem_info *info);
+plba_res schem_find_start_sector(const struct schem_ctx *schem_ctx,
+                                 const struct img_ctx *img_ctx,
+                                 const struct schem_info *info, p32 part_ign);
 
-pres schem_calc_last_sector(const struct schem_ctx *schem_ctx,
-                            const struct img_ctx *img_ctx, pu64 *lba,
-                            const struct schem_info *info);
+plba_res schem_find_last_sector(const struct schem_ctx *schem_ctx,
+                                const struct img_ctx *img_ctx,
+                                const struct schem_info *info, p32 part_ign,
+                                plba first_lba);
 
 #endif

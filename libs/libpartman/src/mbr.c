@@ -160,6 +160,8 @@ enum mbr_load_res mbr_load(struct mbr *mbr, const struct img_ctx *img_ctx)
     if(mbr_is_present(reg)) {
         mbr_read(reg, mbr);
         load_res = mbr_load_ok;
+
+        plog_dbg("Loaded MBR");
     } else {
         load_res = mbr_load_not_found;
     }
@@ -188,6 +190,8 @@ pres mbr_save(const struct mbr *mbr, const struct img_ctx *img_ctx)
 
     /* Write MBR */
     mbr_write(reg, mbr);
+
+    plog_dbg("Saved MBR");
 
     /* Unmap MBR sector */
     res = mbr_unmap(reg, img_ctx);

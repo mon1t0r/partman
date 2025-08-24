@@ -433,7 +433,7 @@ enum gpt_load_res gpt_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],
         goto exit;
     }
 
-    plog_dbg("Loaded GPT: header %llu, table %llu", hdr_lba, table_lba);
+    plog_dbg("Loaded GPT: header/table %llu/%llu", hdr_lba, table_lba);
 
     /* Loaded successfully */
     load_res = gpt_load_ok;
@@ -504,7 +504,7 @@ pres gpt_save(const struct gpt_hdr *hdr, const struct gpt_part_ent table[],
     gpt_table_write(table_reg, table, hdr->part_table_entry_cnt,
                     hdr->part_entry_sz);
 
-    plog_dbg("Saved GPT: header %llu, table %llu", hdr_lba, table_lba);
+    plog_dbg("Saved GPT: header/table %llu/%llu", hdr_lba, table_lba);
 
     /* Saved successfully */
     save_res = pres_ok;

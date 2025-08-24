@@ -118,22 +118,20 @@ static void schem_part_delete(struct schem_ctx *schem_ctx,
                               const struct img_ctx *img_ctx)
 {
     struct schem_info info;
-    pu32 part_index_def;
-    pres calc_res;
+    p32 part_index_def;
     pu32 part_index;
     enum scan_res scan_res;
 
     schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
-    calc_res = schem_calc_first_part(schem_ctx, &part_index_def,
-                                     info.part_cnt, 1);
-    if(!calc_res) {
+    part_index_def = schem_find_part_index(schem_ctx, info.part_cnt, 1);
+    if(part_index_def == -1) {
         pprint("No used partitions found\n");
         return;
     }
 
-    scan_res = scan_range_pu32("Partition number", &part_index,
-                               1, info.part_cnt, part_index_def + 1);
+    scan_res = scan_range_pu32("Partition number", &part_index, 1,
+                               info.part_cnt, part_index_def + 1);
     if(scan_res != scan_ok) {
         return;
     }
@@ -153,19 +151,17 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
                  pflag is_new)
 {
     struct schem_info info;
-    pu32 part_index_def;
-    pres calc_res;
+    p32 part_index_res;
     pu32 part_index;
     enum scan_res scan_res;
     pflag is_part_used;
     struct schem_part part;
-    pu64 lba_def;
+    plba_res lba_def;
 
     schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
-    calc_res = schem_calc_first_part(schem_ctx, &part_index_def,
-                                     info.part_cnt, !is_new);
-    if(!calc_res) {
+    part_index_res = schem_find_part_index(schem_ctx, info.part_cnt, !is_new);
+    if(part_index_res == -1) {
         if(is_new) {
             pprint("No free partitions left\n");
         } else {
@@ -174,8 +170,8 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
         return;
     }
 
-    scan_res = scan_range_pu32("Partition number", &part_index,
-                               1, info.part_cnt, part_index_def + 1);
+    scan_res = scan_range_pu32("Partition number", &part_index, 1,
+                               info.part_cnt, part_index_res + 1);
     if(scan_res != scan_ok) {
         return;
     }
@@ -193,8 +189,8 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
         return;
     }
 
-    calc_res = schem_calc_start_sector(schem_ctx, img_ctx, &lba_def, &info);
-    if(!calc_res) {
+    lba_def = schem_find_start_sector(schem_ctx, img_ctx, &info, part_index);
+    if(lba_def == -1) {
         pprint("Unable to find free start sector\n");
         return;
     }
@@ -206,9 +202,9 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
         return;
     }
 
-    lba_def = part.start_lba;
-    calc_res = schem_calc_last_sector(schem_ctx, img_ctx, &lba_def, &info);
-    if(!calc_res) {
+    lba_def = schem_find_last_sector(schem_ctx, img_ctx, &info, part_index,
+                                     part.start_lba);
+    if(lba_def == -1) {
         pprint("Unable to find available last sector\n");
         return;
     }
@@ -220,8 +216,10 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
         return;
     }
 
-    if(schem_check_overlap(schem_ctx, info.part_cnt, &part, &part_index)) {
-        pprint("Overlap detected with partition #%lu\n", part_index + 1);
+    part_index_res = schem_find_overlap(schem_ctx, info.part_cnt, &part,
+                                        part_index);
+    if(part_index_res >= 0) {
+        pprint("Overlap detected with partition #%lu\n", part_index_res + 1);
         return;
     }
 
