@@ -654,7 +654,7 @@ plba_res schem_find_last_sector(const struct schem_ctx *schem_ctx,
 
     if(
         part.end_lba >= info->first_usable_lba &&
-        schem_find_overlap(schem_ctx, info->part_cnt, &part, -1) == -1
+        schem_find_overlap(schem_ctx, info->part_cnt, &part, part_ign) == -1
     ) {
         /* Return aligned LBA */
         return part.end_lba;

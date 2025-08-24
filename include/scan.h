@@ -7,6 +7,8 @@ enum scan_res {
     scan_ok, scan_empty, scan_eof, scan_fail
 };
 
+enum scan_res scan_int(const char *format, void *int_ptr);
+
 enum scan_res scan_char(char *c);
 
 enum scan_res

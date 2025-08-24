@@ -125,39 +125,81 @@ static void schem_print(const struct schem_ctx *schem_ctx,
     }
 }
 
-static void schem_part_delete(struct schem_ctx *schem_ctx,
-                              const struct img_ctx *img_ctx)
+static p32
+schem_part_prompt(const struct schem_ctx *schem_ctx,
+                  const struct img_ctx *img_ctx, pu32 part_cnt,
+                  pflag find_used)
 {
-    struct schem_info info;
     p32 part_index_def;
     pu32 part_index;
     enum scan_res scan_res;
+    pflag is_part_used;
 
+    /* Find first used/free partition index */
+    part_index_def = schem_find_part_index(schem_ctx, part_cnt, find_used);
+    if(part_index_def == -1) {
+        if(find_used) {
+            pprint("No used partitions found\n");
+        } else {
+            pprint("No free partitions left\n");
+        }
+        return -1;
+    }
+
+    /* Get user input */
+    scan_res = prompt_range_pu32("Partition number", &part_index, 1,
+                                 part_cnt, part_index_def + 1);
+    if(scan_res != scan_ok) {
+        return -1;
+    }
+
+    part_index--;
+
+    is_part_used = schem_ctx->funcs.part_is_used(&schem_ctx->s, part_index);
+
+    /* If looking for used partition and partition is not used */
+    if(find_used && !is_part_used) {
+        pprint("Partition is not in use\n");
+        return -1;
+    }
+
+    /* If looking for unused partition and partition is in use */
+    if(!find_used && is_part_used) {
+        pprint("Partition already in use\n");
+        return -1;
+    }
+
+    return part_index;
+}
+
+static pres schem_check_available(const struct schem_ctx *schem_ctx)
+{
     if(schem_ctx->type == schem_type_none) {
         pprint("No partitioning scheme is present\n");
+        return pres_fail;
+    }
+
+    return pres_ok;
+}
+
+static void schem_part_delete(struct schem_ctx *schem_ctx,
+                              const struct img_ctx *img_ctx)
+{
+    pres check_res;
+    struct schem_info info;
+    p32 part_index;
+
+    /* Check if scheme is available for editing */
+    check_res = schem_check_available(schem_ctx);
+    if(!check_res) {
         return;
     }
 
     schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
-    /* Find first used partition index */
-    part_index_def = schem_find_part_index(schem_ctx, info.part_cnt, 1);
-    if(part_index_def == -1) {
-        pprint("No used partitions found\n");
-        return;
-    }
-
-    /* Get user input */
-    scan_res = prompt_range_pu32("Partition number", &part_index, 1,
-                                 info.part_cnt, part_index_def + 1);
-    if(scan_res != scan_ok) {
-        return;
-    }
-
-    part_index--;
-
-    if(!schem_ctx->funcs.part_is_used(&schem_ctx->s, part_index)) {
-        pprint("Partition is not in use\n");
+    /* Prompt partition selection */
+    part_index = schem_part_prompt(schem_ctx, img_ctx, info.part_cnt, 1);
+    if(part_index == -1) {
         return;
     }
 
@@ -166,54 +208,96 @@ static void schem_part_delete(struct schem_ctx *schem_ctx,
 }
 
 static void
-schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
-                 pflag is_new)
+schem_part_change_type_mbr(struct schem_mbr *schem_mbr, pu32 part_index)
 {
-    struct schem_info info;
-    p32 part_index_res;
-    pu32 part_index;
+    pu32 part_type;
     enum scan_res scan_res;
-    pflag is_part_used;
-    struct schem_part part;
-    plba_res lba_def;
 
-    if(schem_ctx->type == schem_type_none) {
-        pprint("No partitioning scheme is present\n");
+    pprint("Partition type: 0x");
+
+    /* Get user input */
+    scan_res = scan_int("%lx", &part_type);
+    if(scan_res != scan_ok) {
+        if(scan_res != scan_eof) {
+            pprint("Invalid value");
+        }
+        return;
+    }
+
+    /* Value is out of 1 byte range */
+    if(part_type & ~0xFF) {
+        pprint("Invalid value");
+        return;
+    }
+
+    schem_mbr->mbr.partitions[part_index].type = part_type;
+}
+
+static void
+schem_part_change_type_gpt(struct schem_gpt *schem_gpt, pu32 part_index)
+{
+    /* TODO: Implement parsing GUID */
+}
+
+static void schem_part_change_type(struct schem_ctx *schem_ctx,
+                                   const struct img_ctx *img_ctx)
+{
+    pres check_res;
+    struct schem_info info;
+    p32 part_index;
+
+    /* Check if scheme is available for editing */
+    check_res = schem_check_available(schem_ctx);
+    if(!check_res) {
         return;
     }
 
     schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
-    /* Find first used/free partition index */
-    part_index_res = schem_find_part_index(schem_ctx, info.part_cnt, !is_new);
-    if(part_index_res == -1) {
-        if(is_new) {
-            pprint("No free partitions left\n");
-        } else {
-            pprint("No used partitions found\n");
-        }
+    /* Prompt partition selection */
+    part_index = schem_part_prompt(schem_ctx, img_ctx, info.part_cnt, 1);
+    if(part_index == -1) {
         return;
     }
 
-    /* Get user input */
-    scan_res = prompt_range_pu32("Partition number", &part_index, 1,
-                                 info.part_cnt, part_index_res + 1);
-    if(scan_res != scan_ok) {
+    switch(schem_ctx->type) {
+        case schem_type_mbr:
+            schem_part_change_type_mbr(&schem_ctx->s.s_mbr, part_index);
+            break;
+
+        case schem_type_gpt:
+            schem_part_change_type_gpt(&schem_ctx->s.s_gpt, part_index);
+            break;
+
+        /* We should not get here as we check for it earlier */
+        case schem_type_none:
+            break;
+    }
+}
+
+static void
+schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
+                 pflag is_new)
+{
+    pres check_res;
+    struct schem_info info;
+    pu32 part_index;
+    enum scan_res scan_res;
+    struct schem_part part;
+    plba_res lba_def;
+    p32 part_index_res;
+
+    /* Check if scheme is available for editing */
+    check_res = schem_check_available(schem_ctx);
+    if(!check_res) {
         return;
     }
 
-    part_index--;
+    schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
-    is_part_used = schem_ctx->funcs.part_is_used(&schem_ctx->s, part_index);
-
-    /* If altering partition and partition is not used */
-    if(!is_new && !is_part_used) {
-        pprint("Partition is not in use\n");
-        return;
-    }
-    /* If creating new partition and partition is in use */
-    if(is_new && is_part_used) {
-        pprint("Partition already in use\n");
+    /* Prompt partition selection */
+    part_index = schem_part_prompt(schem_ctx, img_ctx, info.part_cnt, !is_new);
+    if(part_index == -1) {
         return;
     }
 
@@ -294,6 +378,11 @@ action_handle(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
         /* Create/resize a partition */
         case 'e':
             schem_part_alter(schem_ctx, img_ctx, 0);
+            break;
+
+        /* Change partition type */
+        case 't':
+            schem_part_change_type(schem_ctx, img_ctx);
             break;
 
         /* Delete a partition */

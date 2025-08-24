@@ -9,7 +9,7 @@ enum {
     scan_buf_sz = 256
 };
 
-static enum scan_res scan_int(const char *format, void *int_ptr)
+enum scan_res scan_int(const char *format, void *int_ptr)
 {
     char buf[scan_buf_sz];
     char *s;
@@ -74,63 +74,41 @@ enum scan_res scan_char(char *c)
     return scan_ok;
 }
 
-enum scan_res
-prompt_range_pu32(const char *prompt, pu32 *int_ptr, pu32 start, pu32 end,
-                  pu32 def)
-{
-    enum scan_res res;
-
-    pprint("%s (%lu-%lu, default %lu): ", prompt, start, end, def);
-
-    res = scan_int("%lu", int_ptr);
-
-    if(res == scan_empty) {
-        *int_ptr = def;
-        return scan_ok;
-    }
-
-    if(res != scan_ok) {
-        if(res != scan_eof) {
-            pprint("Invalid value");
-        }
-        return res;
-    }
-
-    if(*int_ptr < start || *int_ptr > end) {
-        pprint("Value out of range");
-        return scan_fail;
-    }
-
-    return scan_ok;
+#define FUNC_DEFINE_PROMPT_RANGE(TYPE, CONV_SPEC)                          \
+enum scan_res                                                              \
+prompt_range_##TYPE(const char *prompt, TYPE *int_ptr, TYPE start,         \
+                    TYPE end, TYPE def)                                    \
+{                                                                          \
+    enum scan_res res;                                                     \
+                                                                           \
+    pprint("%s (" #CONV_SPEC "-" #CONV_SPEC ", default " #CONV_SPEC "): ", \
+           prompt, start, end, def);                                       \
+                                                                           \
+    res = scan_int(#CONV_SPEC, int_ptr);                                   \
+                                                                           \
+    if(res == scan_empty) {                                                \
+        *int_ptr = def;                                                    \
+        return scan_ok;                                                    \
+    }                                                                      \
+                                                                           \
+    if(res != scan_ok) {                                                   \
+        if(res != scan_eof) {                                              \
+            pprint("Invalid value");                                       \
+        }                                                                  \
+        return res;                                                        \
+    }                                                                      \
+                                                                           \
+    if(*int_ptr < start || *int_ptr > end) {                               \
+        pprint("Value out of range");                                      \
+        return scan_fail;                                                  \
+    }                                                                      \
+                                                                           \
+    return scan_ok;                                                        \
 }
 
-enum scan_res
-prompt_range_pu64(const char *prompt, pu64 *int_ptr, pu64 start, pu64 end,
-                  pu64 def)
-{
-    enum scan_res res;
+FUNC_DEFINE_PROMPT_RANGE(pu32, %lu)
 
-    pprint("%s (%llu-%llu, default %llu): ", prompt, start, end, def);
+FUNC_DEFINE_PROMPT_RANGE(pu64, %llu)
 
-    res = scan_int("%lu", int_ptr);
-
-    if(res == scan_empty) {
-        *int_ptr = def;
-        return scan_ok;
-    }
-
-    if(res != scan_ok) {
-        if(res != scan_eof) {
-            pprint("Invalid value");
-        }
-        return res;
-    }
-
-    if(*int_ptr < start || *int_ptr > end) {
-        pprint("Value out of range");
-        return scan_fail;
-    }
-
-    return scan_ok;
-}
+#undef FUNC_DEFINE_PROMPT_RANGE
 
