@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
 #include <time.h>
 #include <fcntl.h>
 
@@ -236,7 +237,22 @@ schem_part_change_type_mbr(struct schem_mbr *schem_mbr, pu32 part_index)
 static void
 schem_part_change_type_gpt(struct schem_gpt *schem_gpt, pu32 part_index)
 {
-    /* TODO: Implement parsing GUID */
+    struct guid part_type;
+    enum scan_res scan_res;
+
+    pprint("Partition type GUID: ");
+
+    /* Get user input */
+    scan_res = scan_guid(&part_type);
+    if(scan_res != scan_ok) {
+        if(scan_res != scan_eof) {
+            pprint("Invalid value");
+        }
+        return;
+    }
+
+    memcpy(&schem_gpt->table_prim[part_index].type_guid, &part_type,
+           sizeof(part_type));
 }
 
 static void schem_part_change_type(struct schem_ctx *schem_ctx,

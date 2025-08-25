@@ -9,34 +9,26 @@ enum {
     scan_buf_sz = 256
 };
 
-enum scan_res scan_int(const char *format, void *int_ptr)
+enum scan_res scan_str(char *buf, int buf_sz)
 {
-    char buf[scan_buf_sz];
-    char *s;
-    int i;
+    buf = fgets(buf, buf_sz, stdin);
 
-    s = fgets(buf, sizeof(buf), stdin);
-
-    /* EOF or error */
-    if(s == NULL) {
-        /* Reset EOF */
+    /* EOF of error */
+    if(buf == NULL) {
         if(feof(stdin)) {
+            /* Reset EOF */
             clearerr(stdin);
             return scan_eof;
         }
         return scan_fail;
     }
 
-    i = sscanf(s, format, int_ptr);
+    /* Remove newline at the end, if present */
+    buf[strcspn(buf, "\n\r")] = '\0';
 
     /* Empty string */
-    if(i == EOF) {
+    if(buf[0] == '\0') {
         return scan_empty;
-    }
-
-    /* Error */
-    if(i != 1) {
-        return scan_fail;
     }
 
     return scan_ok;
@@ -45,31 +37,61 @@ enum scan_res scan_int(const char *format, void *int_ptr)
 enum scan_res scan_char(char *c)
 {
     char buf[scan_buf_sz];
-    char *s;
+    enum scan_res res;
 
-    s = fgets(buf, sizeof(buf), stdin);
-
-    /* EOF or error */
-    if(s == NULL) {
-        /* Reset EOF */
-        if(feof(stdin)) {
-            clearerr(stdin);
-            return scan_eof;
-        }
-        return scan_fail;
+    res = scan_str(buf, sizeof(buf));
+    if(res != scan_ok) {
+        return res;
     }
 
     /* Empty string */
-    if(s[0] == '\0') {
+    if(buf[0] == '\0') {
         return scan_empty;
     }
 
     /* Error */
-    if(strlen(s) != 2 || s[1] != '\n') {
+    if(strlen(buf) != 1) {
         return scan_fail;
     }
 
-    *c = s[0];
+    *c = buf[0];
+
+    return scan_ok;
+}
+
+enum scan_res scan_guid(struct guid *guid)
+{
+    char buf[scan_buf_sz];
+    enum scan_res scan_res;
+    pres proc_res;
+
+    scan_res = scan_str(buf, sizeof(buf));
+    if(scan_res != scan_ok) {
+        return scan_res;
+    }
+
+    proc_res = str_to_guid(buf, guid);
+
+    return proc_res ? scan_ok : scan_fail;
+}
+
+enum scan_res scan_int(const char *format, void *int_ptr)
+{
+    char buf[scan_buf_sz];
+    enum scan_res res;
+    int i;
+
+    res = scan_str(buf, sizeof(buf));
+    if(res != scan_ok) {
+        return res;
+    }
+
+    i = sscanf(buf, format, int_ptr);
+
+    /* Error */
+    if(i != 1) {
+        return scan_fail;
+    }
 
     return scan_ok;
 }

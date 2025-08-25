@@ -11,7 +11,7 @@ struct guid {
     pu16 time_hi_ver;
     pu8 cl_seq_hi_res;
     pu8 cl_seq_lo;
-    pu8 node[6];
+    pu8 nodes[6];
 };
 
 void guid_create(struct guid *guid);
@@ -25,6 +25,8 @@ void guid_crc_compute(pcrc32 *crc32, const struct guid *guid);
 pflag guid_is_zero(const struct guid *guid);
 
 void guid_to_str(char *buf, const struct guid *guid);
+
+pres str_to_guid(const char *buf, struct guid *guid);
 
 #endif
 
