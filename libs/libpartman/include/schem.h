@@ -5,50 +5,21 @@
 #include "gpt.h"
 #include "img_ctx.h"
 
-/* Macro to be used on scheme functions, which may not be implemented */
-#define CALL_FUNC_NORET(func, args) \
-do {                          \
-    if(func) {                \
-        func args;            \
-    }                         \
-} while(0)
-
-#define CALL_FUNC_NORET1(func, arg1) \
-CALL_FUNC_NORET(func, (arg1))
-
-#define CALL_FUNC_NORET2(func, arg1, arg2) \
-CALL_FUNC_NORET(func, (arg1, arg2))
-
-#define CALL_FUNC_NORET3(func, arg1, arg2, arg3) \
-CALL_FUNC_NORET(func, (arg1, arg2, arg3))
-
-#define CALL_FUNC_NORET4(func, arg1, arg2, arg3, arg4) \
-CALL_FUNC_NORET(func, (arg1, arg2, arg3, arg4))
-
 /* === Scheme definitions === */
 
 /* MBR partitioning scheme */
 struct schem_mbr {
-    /* In-memory MBR structure */
+    /* MBR */
     struct mbr mbr;
 };
 
 /* GPT partitioning scheme */
 struct schem_gpt {
-    /* Protective MBR partitioning scheme */
-    struct schem_mbr mbr_prot;
+    /* Protective MBR */
+    struct mbr mbr_prot;
 
-    /* In-memory GPT primary header structure */
-    struct gpt_hdr hdr_prim;
-
-    /* In-memory GPT primary table structure */
-    struct gpt_part_ent *table_prim;
-
-    /* In-memory GPT secondary header structure */
-    struct gpt_hdr hdr_sec;
-
-    /* In-memory GPT secondary table structure */
-    struct gpt_part_ent *table_sec;
+    /* GPT */
+    struct gpt gpt;
 };
 
 /* Partitioning scheme type */
@@ -148,18 +119,18 @@ void (*schem_func_free) (
     union schem             *schem
 );
 
-/* Functions 'sync', 'init' and 'free' are not required to be implemented */
+/* (!) Functions 'sync', 'init' and 'free' may not be implemented */
 
 /* Pointers to common scheme functions, which can be called from outside */
 struct schem_funcs {
-    schem_func_sync sync;
-    schem_func_get_info get_info;
+    schem_func_sync         sync;
+    schem_func_get_info     get_info;
     schem_func_part_is_used part_is_used;
-    schem_func_part_new part_new;
-    schem_func_part_delete part_delete;
-    schem_func_part_get part_get;
-    schem_func_part_set part_set;
-    schem_func_save save;
+    schem_func_part_new     part_new;
+    schem_func_part_delete  part_delete;
+    schem_func_part_get     part_get;
+    schem_func_part_set     part_set;
+    schem_func_save         save;
 };
 
 /* Pointers to common scheme functions, which are internal to scheme context */
@@ -170,16 +141,16 @@ struct schem_funcs_int {
 
 struct schem_ctx {
     /* Partitioning scheme type */
-    enum schem_type type;
+    enum schem_type        type;
 
     /* Partitioning scheme public used functions, depends on type */
-    struct schem_funcs funcs;
+    struct schem_funcs     funcs;
 
     /* Partitioning scheme internal used functions, depends on type */
     struct schem_funcs_int funcs_int;
 
     /* Partitioning scheme used, depends on type */
-    union schem s;
+    union schem            s;
 };
 
 void schem_init(struct schem_ctx *schem_ctx);

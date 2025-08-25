@@ -10,10 +10,10 @@
 
 enum {
     /* MBR boot signature */
-    mbr_boot_sig  = 0xAA55,
+    mbr_boot_sig       = 0xAA55,
 
     /* Protective MBR partition type */
-    mbr_prot_type = 0xEE
+    mbr_part_type_prot = 0xEE
 };
 
 static pu8 *mbr_map(const struct img_ctx *img_ctx)
@@ -94,7 +94,7 @@ void mbr_init_protective(struct mbr *mbr, const struct img_ctx *img_ctx)
     part = &mbr->partitions[0];
 
     part->boot_ind = 0x0;
-    part->type = mbr_prot_type;
+    part->type = mbr_part_type_prot;
     part->start_lba = 1;
     part->sz_lba = img_sz_lba - part->start_lba;
     part->start_chs = lba_to_chs(img_ctx, part->start_lba);
@@ -139,7 +139,7 @@ pflag mbr_is_present(const pu8 *buf)
 
 pflag mbr_is_part_used(const struct mbr_part *part)
 {
-    return part->type != 0 && part->sz_lba != 0;
+    return part->type != 0;
 }
 
 enum mbr_load_res mbr_load(struct mbr *mbr, const struct img_ctx *img_ctx)

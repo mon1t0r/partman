@@ -65,7 +65,7 @@ static void schem_print_gpt(const struct schem_gpt *schem_gpt)
     char buf[50];
     int i;
 
-    hdr = &schem_gpt->hdr_prim;
+    hdr = &schem_gpt->gpt.hdr_prim;
 
     pprint("Partitioning scheme: GPT\n");
 
@@ -75,7 +75,7 @@ static void schem_print_gpt(const struct schem_gpt *schem_gpt)
     pprint("=== Partitions === \n");
 
     for(i = 0; i < hdr->part_table_entry_cnt; i++) {
-        part = &schem_gpt->table_prim[i];
+        part = &schem_gpt->gpt.table_prim[i];
 
         /* Empty partition */
         if(!gpt_is_part_used(part)) {
@@ -251,7 +251,7 @@ schem_part_change_type_gpt(struct schem_gpt *schem_gpt, pu32 part_index)
         return;
     }
 
-    memcpy(&schem_gpt->table_prim[part_index].type_guid, &part_type,
+    memcpy(&schem_gpt->gpt.table_prim[part_index].type_guid, &part_type,
            sizeof(part_type));
 }
 
@@ -408,7 +408,9 @@ action_handle(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
 
         /* Write the partition table */
         case 'w':
-            CALL_FUNC_NORET1(schem_ctx->funcs.sync, &schem_ctx->s);
+            if(schem_ctx->funcs.sync) {
+                schem_ctx->funcs.sync(&schem_ctx->s);
+            }
             res = schem_ctx->funcs.save(&schem_ctx->s, img_ctx);
             break;
 

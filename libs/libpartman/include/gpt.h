@@ -6,7 +6,28 @@
 #include "guid.h"
 #include "crc32.h"
 
-/* GUID Partition Table (GPT) header structure */
+/* GPT partition entry structure */
+struct gpt_part_ent {
+    /* Partition type GUID */
+    struct guid type_guid;
+
+    /* Partition GUID, which is unique for every partition entry */
+    struct guid unique_guid;
+
+    /* LBA of the first sector, used by a partition */
+    plba start_lba;
+
+    /* LBA of the last sector, used by a partition */
+    plba end_lba;
+
+    /* Attributes bit field */
+    pu64 attr;
+
+    /* Name of the partition, using UCS-2 */
+    pchar_ucs name[36];
+};
+
+/* GPT header structure */
 struct gpt_hdr {
     /* Revision number */
     pu32 rev;
@@ -45,25 +66,19 @@ struct gpt_hdr {
     pcrc32 part_table_crc32;
 };
 
-/* GPT partition entry structure */
-struct gpt_part_ent {
-    /* Partition type GUID */
-    struct guid type_guid;
+/* GUID Partition Table (GPT) structure */
+struct gpt {
+    /* In-memory GPT primary header structure */
+    struct gpt_hdr hdr_prim;
 
-    /* Partition GUID, which is unique for every partition entry */
-    struct guid unique_guid;
+    /* In-memory GPT primary table structure */
+    struct gpt_part_ent *table_prim;
 
-    /* LBA of the first sector, used by a partition */
-    plba start_lba;
+    /* In-memory GPT secondary header structure */
+    struct gpt_hdr hdr_sec;
 
-    /* LBA of the last sector, used by a partition */
-    plba end_lba;
-
-    /* Attributes bit field */
-    pu64 attr;
-
-    /* Name of the partition, using UCS-2 */
-    pchar_ucs name[36];
+    /* In-memory GPT secondary table structure */
+    struct gpt_part_ent *table_sec;
 };
 
 enum gpt_load_res {

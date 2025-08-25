@@ -12,7 +12,13 @@ enum schem_load_res {
     schem_load_ok, schem_load_not_found, schem_load_fatal
 };
 
-const struct guid guid_linux_fs = {
+enum {
+    /* Linux */
+    mbr_part_type_def = 0x83
+};
+
+/* Linux filesystem */
+const struct guid gpt_part_type_def = {
     0x0FC63DAF, 0x8483, 0x4772, 0x8E, 0x79,
     { 0x3D, 0x69, 0xD8, 0x47, 0x7D, 0xE4 }
 };
@@ -84,7 +90,7 @@ static void schem_part_new_mbr(union schem *schem, pu32 index)
 
     part_mbr = &schem->s_mbr.mbr.partitions[index];
 
-    part_mbr->type = 0x83;
+    part_mbr->type = mbr_part_type_def;
 }
 
 static pflag schem_part_is_used_mbr(const union schem *schem, pu32 index)
@@ -112,9 +118,9 @@ static pres schem_init_mbr(union schem *schem, const struct img_ctx *img_ctx)
 
 static void schem_free_gpt(union schem *schem)
 {
-    struct schem_gpt *gpt;
+    struct gpt *gpt;
 
-    gpt = &schem->s_gpt;
+    gpt = &schem->s_gpt.gpt;
 
     free(gpt->table_prim);
     free(gpt->table_sec);
@@ -123,45 +129,49 @@ static void schem_free_gpt(union schem *schem)
 static pres schem_save_gpt(const union schem *schem,
                            const struct img_ctx *img_ctx)
 {
-    const struct schem_gpt *gpt;
+    const struct schem_gpt *schem_gpt;
     pres res;
 
-    gpt = &schem->s_gpt;
+    schem_gpt = &schem->s_gpt;
 
     /* Protective MBR */
-    res = mbr_save(&gpt->mbr_prot.mbr, img_ctx);
+    res = mbr_save(&schem_gpt->mbr_prot, img_ctx);
     if(!res) {
         return pres_fail;
     }
 
     /* UEFI specification requires to update secondary GPT first */
-    res = gpt_save(&gpt->hdr_sec, gpt->table_sec, img_ctx);
+    res = gpt_save(&schem_gpt->gpt.hdr_sec, schem_gpt->gpt.table_sec,
+                   img_ctx);
     if(!res) {
         return pres_fail;
     }
 
-    return gpt_save(&gpt->hdr_prim, gpt->table_prim, img_ctx);
+    return gpt_save(&schem_gpt->gpt.hdr_prim, schem_gpt->gpt.table_prim,
+                    img_ctx);
 }
 
 static enum schem_load_res
 schem_load_gpt(struct schem_gpt *schem_gpt, const struct img_ctx *img_ctx)
 {
+    struct gpt *gpt;
     enum schem_load_res res;
     enum gpt_load_res gpt_res_prim;
     enum gpt_load_res gpt_res_sec;
     plba gpt_lba_sec;
     plba gpt_table_lba;
 
-    schem_gpt->table_prim = calloc(gpt_part_cnt, sizeof(struct gpt_part_ent));
-    schem_gpt->table_sec = calloc(gpt_part_cnt, sizeof(struct gpt_part_ent));
+    gpt = &schem_gpt->gpt;
 
-    if(schem_gpt->table_prim == NULL || schem_gpt->table_sec == NULL) {
+    gpt->table_prim = calloc(gpt_part_cnt, sizeof(struct gpt_part_ent));
+    gpt->table_sec = calloc(gpt_part_cnt, sizeof(struct gpt_part_ent));
+
+    if(gpt->table_prim == NULL || gpt->table_sec == NULL) {
         return schem_load_fatal;
     }
 
     /* Load primary GPT, located at LBA 1 */
-    gpt_res_prim = gpt_load(&schem_gpt->hdr_prim, schem_gpt->table_prim,
-                            img_ctx, 1);
+    gpt_res_prim = gpt_load(&gpt->hdr_prim, gpt->table_prim, img_ctx, 1);
     if(gpt_res_prim == gpt_load_fatal) {
         plog_err("Error while loading primary GPT");
         res = schem_load_fatal;
@@ -171,14 +181,14 @@ schem_load_gpt(struct schem_gpt *schem_gpt, const struct img_ctx *img_ctx)
     /* If primary GPT loaded successfully, use alt_lba, otherwise use
      * last image LBA to locate secondary GPT */
     if(gpt_res_prim == gpt_load_ok) {
-        gpt_lba_sec = schem_gpt->hdr_prim.alt_lba;
+        gpt_lba_sec = gpt->hdr_prim.alt_lba;
     } else {
         gpt_lba_sec = byte_to_lba(img_ctx, img_ctx->img_sz, 0) - 1;
     }
 
     /* Load secondary GPT */
-    gpt_res_sec = gpt_load(&schem_gpt->hdr_sec, schem_gpt->table_sec,
-                           img_ctx, gpt_lba_sec);
+    gpt_res_sec = gpt_load(&gpt->hdr_sec, gpt->table_sec, img_ctx,
+                           gpt_lba_sec);
     if(gpt_res_sec == gpt_load_fatal) {
         plog_err("Error while loading secondary GPT");
         res = schem_load_fatal;
@@ -197,13 +207,13 @@ schem_load_gpt(struct schem_gpt *schem_gpt, const struct img_ctx *img_ctx)
                   "next write");
 
         /* Secondary GPT table LBA */
-        gpt_table_lba = schem_gpt->hdr_prim.alt_lba -
+        gpt_table_lba = gpt->hdr_prim.alt_lba -
                         byte_to_lba(img_ctx,
-                                    schem_gpt->hdr_prim.part_table_entry_cnt *
-                                    schem_gpt->hdr_prim.part_entry_sz, 1);
+                                    gpt->hdr_prim.part_table_entry_cnt *
+                                    gpt->hdr_prim.part_entry_sz, 1);
         /* Restore secondary GPT */
-        gpt_restore(&schem_gpt->hdr_sec, schem_gpt->table_sec, gpt_table_lba,
-                    &schem_gpt->hdr_prim, schem_gpt->table_prim);
+        gpt_restore(&gpt->hdr_sec, gpt->table_sec, gpt_table_lba,
+                    &gpt->hdr_prim, gpt->table_prim);
 
         res = schem_load_ok;
         goto exit;
@@ -215,11 +225,11 @@ schem_load_gpt(struct schem_gpt *schem_gpt, const struct img_ctx *img_ctx)
                   "next write");
 
         /* Primary GPT table LBA */
-        gpt_table_lba = schem_gpt->hdr_sec.alt_lba + 1;
+        gpt_table_lba = gpt->hdr_sec.alt_lba + 1;
 
         /* Restore primary GPT */
-        gpt_restore(&schem_gpt->hdr_prim, schem_gpt->table_prim, gpt_table_lba,
-                    &schem_gpt->hdr_sec, schem_gpt->table_sec);
+        gpt_restore(&gpt->hdr_prim, gpt->table_prim, gpt_table_lba,
+                    &gpt->hdr_sec, gpt->table_sec);
 
         res = schem_load_ok;
         goto exit;
@@ -230,8 +240,8 @@ schem_load_gpt(struct schem_gpt *schem_gpt, const struct img_ctx *img_ctx)
 
 exit:
     if(res != schem_load_ok) {
-        free(schem_gpt->table_prim);
-        free(schem_gpt->table_sec);
+        free(gpt->table_prim);
+        free(gpt->table_sec);
     }
 
     return res;
@@ -243,7 +253,7 @@ schem_part_set_gpt(union schem *schem, const struct img_ctx *img_ctx,
 {
     struct gpt_part_ent *part_gpt;
 
-    part_gpt = &schem->s_gpt.table_prim[index];
+    part_gpt = &schem->s_gpt.gpt.table_prim[index];
 
     part_gpt->start_lba = part->start_lba;
     part_gpt->end_lba = part->end_lba;
@@ -255,7 +265,7 @@ schem_part_get_gpt(const union schem *schem, pu32 index,
 {
     const struct gpt_part_ent *part_gpt;
 
-    part_gpt = &schem->s_gpt.table_prim[index];
+    part_gpt = &schem->s_gpt.gpt.table_prim[index];
 
     part->start_lba = part_gpt->start_lba;
     part->end_lba = part_gpt->end_lba;
@@ -265,7 +275,7 @@ static void schem_part_delete_gpt(union schem *schem, pu32 index)
 {
     struct gpt_part_ent *part_gpt;
 
-    part_gpt = &schem->s_gpt.table_prim[index];
+    part_gpt = &schem->s_gpt.gpt.table_prim[index];
 
     memset(part_gpt, 0, sizeof(*part_gpt));
 }
@@ -274,15 +284,15 @@ static void schem_part_new_gpt(union schem *schem, pu32 index)
 {
     struct gpt_part_ent *part_gpt;
 
-    part_gpt = &schem->s_gpt.table_prim[index];
+    part_gpt = &schem->s_gpt.gpt.table_prim[index];
 
     guid_create(&part_gpt->unique_guid);
-    part_gpt->type_guid = guid_linux_fs;
+    part_gpt->type_guid = gpt_part_type_def;
 }
 
 static pflag schem_part_is_used_gpt(const union schem *schem, pu32 index)
 {
-    return gpt_is_part_used(&schem->s_gpt.table_prim[index]);
+    return gpt_is_part_used(&schem->s_gpt.gpt.table_prim[index]);
 }
 
 static void
@@ -291,7 +301,7 @@ schem_get_info_gpt(const union schem *schem, const struct img_ctx *img_ctx,
 {
     const struct gpt_hdr *hdr;
 
-    hdr = &schem->s_gpt.hdr_prim;
+    hdr = &schem->s_gpt.gpt.hdr_prim;
 
     info->first_usable_lba = hdr->first_usable_lba;
     info->last_usable_lba = hdr->last_usable_lba;
@@ -300,9 +310,9 @@ schem_get_info_gpt(const union schem *schem, const struct img_ctx *img_ctx,
 
 static void schem_sync_gpt(union schem *schem)
 {
-    struct schem_gpt *gpt;
+    struct gpt *gpt;
 
-    gpt = &schem->s_gpt;
+    gpt = &schem->s_gpt.gpt;
 
     /* Compute GPT table CRCs (primary table should be equal to secondary) */
     gpt_crc_fill_table(&gpt->hdr_prim, gpt->table_prim);
@@ -315,21 +325,23 @@ static void schem_sync_gpt(union schem *schem)
 
 static pres schem_init_gpt(union schem *schem, const struct img_ctx *img_ctx)
 {
-    struct schem_gpt *gpt;
+    struct schem_gpt *schem_gpt;
 
-    gpt = &schem->s_gpt;
+    schem_gpt = &schem->s_gpt;
 
-    gpt->table_prim = calloc(gpt_part_cnt, sizeof(struct gpt_part_ent));
-    gpt->table_sec = calloc(gpt_part_cnt, sizeof(struct gpt_part_ent));
+    schem_gpt->gpt.table_prim = calloc(gpt_part_cnt,
+                                       sizeof(struct gpt_part_ent));
+    schem_gpt->gpt.table_sec = calloc(gpt_part_cnt,
+                                      sizeof(struct gpt_part_ent));
 
-    if(gpt->table_prim == NULL || gpt->table_sec == NULL) {
+    if(schem_gpt->gpt.table_prim == NULL || schem_gpt->gpt.table_sec == NULL) {
         return pres_fail;
     }
 
-    gpt_init_new(&gpt->hdr_prim, &gpt->hdr_sec,
-                 gpt->table_prim, gpt->table_sec, img_ctx);
+    gpt_init_new(&schem_gpt->gpt.hdr_prim, &schem_gpt->gpt.hdr_sec,
+                 schem_gpt->gpt.table_prim, schem_gpt->gpt.table_sec, img_ctx);
 
-    mbr_init_protective(&gpt->mbr_prot.mbr, img_ctx);
+    mbr_init_protective(&schem_gpt->mbr_prot, img_ctx);
 
     return pres_ok;
 }
@@ -397,13 +409,17 @@ void schem_init(struct schem_ctx *schem_ctx)
 pres schem_change_type(struct schem_ctx *schem_ctx,
                        const struct img_ctx *img_ctx, enum schem_type type)
 {
-    CALL_FUNC_NORET1(schem_ctx->funcs_int.free, &schem_ctx->s);
+    if(schem_ctx->funcs_int.free) {
+        schem_ctx->funcs_int.free(&schem_ctx->s);
+    }
 
     schem_ctx->type = type;
     schem_map_funcs(&schem_ctx->funcs, type);
     schem_map_funcs_int(&schem_ctx->funcs_int, type);
 
-    CALL_FUNC_NORET2(schem_ctx->funcs_int.init, &schem_ctx->s, img_ctx);
+    if(schem_ctx->funcs_int.init) {
+        schem_ctx->funcs_int.init(&schem_ctx->s, img_ctx);
+    }
 
     return pres_ok;
 }
