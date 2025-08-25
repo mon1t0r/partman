@@ -114,7 +114,7 @@ pres str_to_guid(const char *buf, struct guid *guid)
     }
 
     i = sscanf(buf,
-               "%08lX-%04lX-%04lX-%02lX%02lX-%02lX%02lX%02lX%02lX%02lX%02lX",
+               " %08lX-%04lX-%04lX-%02lX%02lX-%02lX%02lX%02lX%02lX%02lX%02lX",
                &time_lo, &time_mid, &time_hi_ver, &cl_seq_hi_res, &cl_seq_lo,
                &nodes[0], &nodes[1], &nodes[2], &nodes[3], &nodes[4],
                &nodes[5]);

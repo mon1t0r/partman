@@ -21,7 +21,8 @@ enum action_res {
     action_continue, action_exit_ok, action_exit_fatal
 };
 
-static void schem_print_mbr(const struct schem_mbr *schem_mbr)
+static void schem_print_mbr(const struct schem_mbr *schem_mbr,
+                            const struct img_ctx *img_ctx)
 {
     const struct mbr *mbr;
     const struct mbr_part *part;
@@ -49,6 +50,8 @@ static void schem_print_mbr(const struct schem_mbr *schem_mbr)
         pprint("|-Start LBA    %lu\n", part->start_lba);
         pprint("|-End LBA      %lu\n", part->start_lba + part->sz_lba - 1);
         pprint("|-Sectors      %lu\n", part->sz_lba);
+        pprint("|-Size         %llu bytes\n",
+               lba_to_byte(img_ctx, part->sz_lba));
 
         chs_int_to_tuple(part->start_chs, &c, &h, &s);
         pprint("|-Start C/H/S  %03lu/%03lu/%03lu\n", c, h, s);
@@ -58,12 +61,14 @@ static void schem_print_mbr(const struct schem_mbr *schem_mbr)
     }
 }
 
-static void schem_print_gpt(const struct schem_gpt *schem_gpt)
+static void schem_print_gpt(const struct schem_gpt *schem_gpt,
+                            const struct img_ctx *img_ctx)
 {
     const struct gpt_hdr *hdr;
     const struct gpt_part_ent *part;
     char buf[50];
     int i;
+    plba part_sz;
 
     hdr = &schem_gpt->gpt.hdr_prim;
 
@@ -82,6 +87,8 @@ static void schem_print_gpt(const struct schem_gpt *schem_gpt)
             continue;
         }
 
+        part_sz = part->end_lba - part->start_lba + 1;
+
         pprint("Partition #%d\n", i + 1);
 
         guid_to_str(buf, &part->unique_guid);
@@ -92,7 +99,8 @@ static void schem_print_gpt(const struct schem_gpt *schem_gpt)
 
         pprint("|-Start LBA   %llu\n", part->start_lba);
         pprint("|-End LBA     %llu\n", part->end_lba);
-        pprint("|-Sectors     %llu\n", part->end_lba - part->start_lba + 1);
+        pprint("|-Sectors     %llu\n", part_sz);
+        pprint("|-Size        %llu bytes\n", lba_to_byte(img_ctx, part_sz));
 
         /* TODO: Print partition name */
     }
@@ -113,11 +121,11 @@ static void schem_print(const struct schem_ctx *schem_ctx,
 
     switch(schem_ctx->type) {
         case schem_type_mbr:
-            schem_print_mbr(&schem_ctx->s.s_mbr);
+            schem_print_mbr(&schem_ctx->s.s_mbr, img_ctx);
             break;
 
         case schem_type_gpt:
-            schem_print_gpt(&schem_ctx->s.s_gpt);
+            schem_print_gpt(&schem_ctx->s.s_gpt, img_ctx);
             break;
 
         case schem_type_none:
@@ -241,7 +249,7 @@ schem_part_change_type_mbr(struct schem_mbr *schem_mbr, pu32 part_index)
     pprint("Partition type: 0x");
 
     /* Get user input */
-    scan_res = scan_int("%lx", &part_type);
+    scan_res = scan_int(" %lx", &part_type);
     if(scan_res != scan_ok) {
         if(scan_res != scan_eof) {
             pprint("Invalid value\n");
@@ -365,7 +373,7 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
     }
 
     /* Get user input */
-    scan_res = prompt_range_pu64("Last sector", &part.end_lba,
+    scan_res = prompt_sector_ext("Last sector", &part.end_lba,
                                  part.start_lba, info.last_usable_lba,
                                  lba_def);
     if(scan_res != scan_ok) {

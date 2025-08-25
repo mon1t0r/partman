@@ -38,23 +38,19 @@ enum scan_res scan_char(char *c)
 {
     char buf[scan_buf_sz];
     enum scan_res res;
+    int i;
 
     res = scan_str(buf, sizeof(buf));
     if(res != scan_ok) {
         return res;
     }
 
-    /* Empty string */
-    if(buf[0] == '\0') {
-        return scan_empty;
-    }
+    i = sscanf(buf, " %c", c);
 
     /* Error */
-    if(strlen(buf) != 1) {
+    if(i != 1) {
         return scan_fail;
     }
-
-    *c = buf[0];
 
     return scan_ok;
 }
@@ -96,6 +92,51 @@ enum scan_res scan_int(const char *format, void *int_ptr)
     return scan_ok;
 }
 
+enum scan_res
+prompt_sector_ext(const char *prompt, plba *int_ptr, plba start, plba end,
+                  plba def)
+{
+    char buf[scan_buf_sz];
+    enum scan_res res;
+    int i;
+    char sign_c;
+    char mod_c;
+
+    pprint("%s, +/-sectors or +/-size{K,M,G,T,P} (%llu-%llu, default %llu): ",
+           prompt, start, end, def);
+
+    res = scan_str(buf, sizeof(buf));
+
+    if(res == scan_empty) {
+        *int_ptr = def;
+        return scan_ok;
+    }
+
+    if(res != scan_ok) {
+        if(res != scan_eof) {
+            pprint("Invalid value");
+        }
+        return res;
+    }
+
+    /* TODO: Implement correct parsing */
+
+    i = sscanf(buf, " %c%llu%c", &sign_c, int_ptr, &mod_c);
+
+    /* Error */
+    if(i != 3) {
+        pprint("Invalid value");
+        return scan_fail;
+    }
+
+    if(*int_ptr < start || *int_ptr > end) {
+        pprint("Value out of range");
+        return scan_fail;
+    }
+
+    return scan_ok;
+}
+
 #define FUNC_DEFINE_PROMPT_RANGE(TYPE, CONV_SPEC)                          \
 enum scan_res                                                              \
 prompt_range_##TYPE(const char *prompt, TYPE *int_ptr, TYPE start,         \
@@ -103,10 +144,10 @@ prompt_range_##TYPE(const char *prompt, TYPE *int_ptr, TYPE start,         \
 {                                                                          \
     enum scan_res res;                                                     \
                                                                            \
-    pprint("%s (" #CONV_SPEC "-" #CONV_SPEC ", default " #CONV_SPEC "): ", \
+    pprint("%s (" CONV_SPEC "-" CONV_SPEC ", default " CONV_SPEC "): ",    \
            prompt, start, end, def);                                       \
                                                                            \
-    res = scan_int(#CONV_SPEC, int_ptr);                                   \
+    res = scan_int(" " CONV_SPEC, int_ptr);                                \
                                                                            \
     if(res == scan_empty) {                                                \
         *int_ptr = def;                                                    \
@@ -128,9 +169,9 @@ prompt_range_##TYPE(const char *prompt, TYPE *int_ptr, TYPE start,         \
     return scan_ok;                                                        \
 }
 
-FUNC_DEFINE_PROMPT_RANGE(pu32, %lu)
+FUNC_DEFINE_PROMPT_RANGE(pu32, "%lu")
 
-FUNC_DEFINE_PROMPT_RANGE(pu64, %llu)
+FUNC_DEFINE_PROMPT_RANGE(pu64, "%llu")
 
 #undef FUNC_DEFINE_PROMPT_RANGE
 
