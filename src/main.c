@@ -11,8 +11,8 @@
 #include "partman_types.h"
 #include "options.h"
 #include "log.h"
-#include "img_ctx.h"
 #include "scan.h"
+#include "img_ctx.h"
 #include "schem.h"
 
 #define PARTMAN_VER "1.0"
@@ -128,8 +128,7 @@ static void schem_print(const struct schem_ctx *schem_ctx,
 
 static p32
 schem_part_prompt(const struct schem_ctx *schem_ctx,
-                  const struct img_ctx *img_ctx, pu32 part_cnt,
-                  pflag find_used)
+                  pu32 part_cnt, pflag find_used)
 {
     p32 part_index_def;
     pu32 part_index;
@@ -199,13 +198,38 @@ static void schem_part_delete(struct schem_ctx *schem_ctx,
     schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
     /* Prompt partition selection */
-    part_index = schem_part_prompt(schem_ctx, img_ctx, info.part_cnt, 1);
+    part_index = schem_part_prompt(schem_ctx, info.part_cnt, 1);
     if(part_index == -1) {
         return;
     }
 
     /* Delete partition */
     schem_ctx->funcs.part_delete(&schem_ctx->s, part_index);
+}
+
+static void schem_part_toggle_boot(struct schem_ctx *schem_ctx,
+                                   const struct img_ctx *img_ctx)
+{
+    struct schem_info info;
+    p32 part_index;
+    struct mbr_part *part;
+
+    if(schem_ctx->type != schem_type_mbr) {
+        pprint("Partitioning scheme is not MBR\n");
+        return;
+    }
+
+    schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
+
+    /* Prompt partition selection */
+    part_index = schem_part_prompt(schem_ctx, info.part_cnt, 1);
+    if(part_index == -1) {
+        return;
+    }
+
+    part = &schem_ctx->s.s_mbr.mbr.partitions[part_index];
+
+    part->boot_ind = !part->boot_ind;
 }
 
 static void
@@ -220,14 +244,14 @@ schem_part_change_type_mbr(struct schem_mbr *schem_mbr, pu32 part_index)
     scan_res = scan_int("%lx", &part_type);
     if(scan_res != scan_ok) {
         if(scan_res != scan_eof) {
-            pprint("Invalid value");
+            pprint("Invalid value\n");
         }
         return;
     }
 
     /* Value is out of 1 byte range */
     if(part_type & ~0xFF) {
-        pprint("Invalid value");
+        pprint("Invalid value\n");
         return;
     }
 
@@ -246,7 +270,7 @@ schem_part_change_type_gpt(struct schem_gpt *schem_gpt, pu32 part_index)
     scan_res = scan_guid(&part_type);
     if(scan_res != scan_ok) {
         if(scan_res != scan_eof) {
-            pprint("Invalid value");
+            pprint("Invalid value\n");
         }
         return;
     }
@@ -271,7 +295,7 @@ static void schem_part_change_type(struct schem_ctx *schem_ctx,
     schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
     /* Prompt partition selection */
-    part_index = schem_part_prompt(schem_ctx, img_ctx, info.part_cnt, 1);
+    part_index = schem_part_prompt(schem_ctx, info.part_cnt, 1);
     if(part_index == -1) {
         return;
     }
@@ -312,7 +336,7 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
     schem_ctx->funcs.get_info(&schem_ctx->s, img_ctx, &info);
 
     /* Prompt partition selection */
-    part_index = schem_part_prompt(schem_ctx, img_ctx, info.part_cnt, !is_new);
+    part_index = schem_part_prompt(schem_ctx, info.part_cnt, !is_new);
     if(part_index == -1) {
         return;
     }
@@ -399,6 +423,11 @@ action_handle(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
         /* Change partition type */
         case 't':
             schem_part_change_type(schem_ctx, img_ctx);
+            break;
+
+        /* Toggle partition bootable flag */
+        case 'a':
+            schem_part_toggle_boot(schem_ctx, img_ctx);
             break;
 
         /* Delete a partition */
