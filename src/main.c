@@ -155,8 +155,8 @@ schem_part_prompt(const struct schem_ctx *schem_ctx,
     }
 
     /* Get user input */
-    scan_res = prompt_range_pu32("Partition number", &part_index, 1,
-                                 part_cnt, part_index_def + 1);
+    scan_res = prompt_range_pu32("Partition number", 1, part_cnt,
+                                 part_index_def + 1, &part_index);
     if(scan_res != scan_ok) {
         return -1;
     }
@@ -357,9 +357,9 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
     }
 
     /* Get user input */
-    scan_res = prompt_range_pu64("First sector", &part.start_lba,
-                                 info.first_usable_lba, info.last_usable_lba,
-                                 lba_def);
+    scan_res = prompt_range_pu64("First sector", info.first_usable_lba,
+                                 info.last_usable_lba, lba_def,
+                                 &part.start_lba);
     if(scan_res != scan_ok) {
         return;
     }
@@ -373,9 +373,9 @@ schem_part_alter(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
     }
 
     /* Get user input */
-    scan_res = prompt_sector_ext("Last sector", &part.end_lba,
-                                 part.start_lba, info.last_usable_lba,
-                                 lba_def);
+    scan_res = prompt_sector_ext("Last sector", part.start_lba,
+                                 info.last_usable_lba, lba_def,
+                                 img_ctx->sec_sz, &part.end_lba);
     if(scan_res != scan_ok) {
         return;
     }

@@ -17,16 +17,16 @@ enum scan_res scan_guid(struct guid *guid);
 enum scan_res scan_int(const char *format, void *int_ptr);
 
 enum scan_res
-prompt_sector_ext(const char *prompt, plba *int_ptr, plba start, plba end,
-                  plba def);
+prompt_sector_ext(const char *prompt, plba start, plba end, plba def,
+                  pu64 sec_sz, plba *int_ptr);
 
 enum scan_res
-prompt_range_pu32(const char *prompt, pu32 *int_ptr, pu32 start, pu32 end,
-                  pu32 def);
+prompt_range_pu32(const char *prompt, pu32 start, pu32 end, pu32 def,
+                  pu32 *int_ptr);
 
 enum scan_res
-prompt_range_pu64(const char *prompt, pu64 *int_ptr, pu64 start, pu64 end,
-                  pu64 def);
+prompt_range_pu64(const char *prompt, pu64 start, pu64 end, pu64 def,
+                  pu64 *int_ptr);
 
 #endif
 
