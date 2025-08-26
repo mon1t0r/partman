@@ -9,12 +9,35 @@
 #include "rand.h"
 
 enum {
+    /* MBR size, in bytes */
+    mbr_sz             = 512,
+
     /* MBR boot signature */
     mbr_boot_sig       = 0xAA55,
 
     /* Protective MBR partition type */
-    mbr_part_type_prot = 0xEE
+    mbr_part_type_prot = 0xEE,
+
+    /* Default MBR partition type - Linux */
+    mbr_part_type_def  = 0x83
 };
+
+static pres mbr_unmap(pu8 *reg, const struct img_ctx *img_ctx)
+{
+    pu64 len;
+    int c;
+
+    /* MBR length, aligned to sectors, in bytes */
+    len = lba_to_byte(img_ctx, byte_to_lba(img_ctx, mbr_sz, 1));
+
+    c = munmap(reg, len);
+    if(c == -1) {
+        perror("munmap()");
+        return pres_fail;
+    }
+
+    return pres_ok;
+}
 
 static pu8 *mbr_map(const struct img_ctx *img_ctx)
 {
@@ -33,23 +56,6 @@ static pu8 *mbr_map(const struct img_ctx *img_ctx)
     }
 
     return r;
-}
-
-static pres mbr_unmap(pu8 *reg, const struct img_ctx *img_ctx)
-{
-    pu64 len;
-    int c;
-
-    /* MBR length, aligned to sectors, in bytes */
-    len = lba_to_byte(img_ctx, byte_to_lba(img_ctx, mbr_sz, 1));
-
-    c = munmap(reg, len);
-    if(c == -1) {
-        perror("munmap()");
-        return pres_fail;
-    }
-
-    return pres_ok;
 }
 
 static void mbr_part_write(pu8 *buf, const struct mbr_part *mbr_part)
@@ -72,48 +78,7 @@ static void mbr_part_read(const pu8 *buf, struct mbr_part *mbr_part)
     mbr_part->sz_lba    = read_pu32(buf + 12);
 }
 
-void mbr_init_new(struct mbr *mbr)
-{
-    memset(mbr, 0, sizeof(*mbr));
-
-    mbr->disk_sig = rand_32();
-}
-
-void mbr_init_protective(struct mbr *mbr, const struct img_ctx *img_ctx)
-{
-    struct mbr_part *part;
-    plba img_sz_lba;
-
-    img_sz_lba = byte_to_lba(img_ctx, img_ctx->img_sz, 0);
-    if(img_sz_lba > 0xFFFFFFFF) {
-        img_sz_lba = 0x100000000;
-    }
-
-    memset(mbr, 0, sizeof(*mbr));
-
-    part = &mbr->partitions[0];
-
-    part->boot_ind = 0x0;
-    part->type = mbr_part_type_prot;
-    part->start_lba = 1;
-    part->sz_lba = img_sz_lba - part->start_lba;
-    part->start_chs = lba_to_chs(img_ctx, part->start_lba);
-    part->end_chs = lba_to_chs(img_ctx, part->start_lba + part->sz_lba - 1);
-}
-
-void mbr_read(const pu8 *buf, struct mbr *mbr)
-{
-    /* Disk signature */
-    mbr->disk_sig = read_pu32(buf + 440);
-
-    /* Partitions */
-    mbr_part_read(buf + 446, &mbr->partitions[0]);
-    mbr_part_read(buf + 462, &mbr->partitions[1]);
-    mbr_part_read(buf + 478, &mbr->partitions[2]);
-    mbr_part_read(buf + 494, &mbr->partitions[3]);
-}
-
-void mbr_write(pu8 *buf, const struct mbr *mbr)
+static void mbr_write(pu8 *buf, const struct mbr *mbr)
 {
     /* Bootstrap code 440 bytes */
 
@@ -132,47 +97,123 @@ void mbr_write(pu8 *buf, const struct mbr *mbr)
     write_pu16(buf + 510, mbr_boot_sig);
 }
 
-pflag mbr_is_present(const pu8 *buf)
+static void mbr_read(const pu8 *buf, struct mbr *mbr)
 {
-    return read_pu16(buf + 510) == mbr_boot_sig;
+    /* Disk signature */
+    mbr->disk_sig = read_pu32(buf + 440);
+
+    /* Partitions */
+    mbr_part_read(buf + 446, &mbr->partitions[0]);
+    mbr_part_read(buf + 462, &mbr->partitions[1]);
+    mbr_part_read(buf + 478, &mbr->partitions[2]);
+    mbr_part_read(buf + 494, &mbr->partitions[3]);
 }
 
-pflag mbr_is_part_used(const struct mbr_part *part)
+static pflag mbr_is_part_used(const struct mbr_part *part)
 {
     return part->type != 0;
 }
 
-enum mbr_load_res mbr_load(struct mbr *mbr, const struct img_ctx *img_ctx)
+static pflag mbr_is_present(const pu8 *buf)
 {
-    enum mbr_load_res load_res;
-    pres res;
-    pu8 *reg;
+    return read_pu16(buf + 510) == mbr_boot_sig;
+}
 
-    /* Map MBR sector */
-    reg = mbr_map(img_ctx);
-    if(reg == NULL) {
-        plog_err("Failed to map image MBR");
-        return mbr_load_fatal;
+static void mbr_init_schem(struct schem *schem, const struct img_ctx *img_ctx)
+{
+    schem->type = schem_type_mbr;
+    schem->first_usable_lba = byte_to_lba(img_ctx, mbr_sz, 1);
+    schem->last_usable_lba = byte_to_lba(img_ctx, img_ctx->img_sz, 0);
+    schem->part_cnt = PARTMAN_SCHEM_MAX_PART_CNT_MBR;
+}
+
+static void mbr_from_schem(const struct schem *schem, struct mbr *mbr,
+                           const struct img_ctx *img_ctx)
+{
+    pu32 i;
+    struct mbr_part *part_mbr;
+    const struct schem_part *part;
+
+    /* Convert scheme details */
+    mbr->disk_sig = schem->id.i;
+
+    /* Convert partitions */
+    for(i = 0; i < schem->part_cnt; i++) {
+        part = &schem->table[i];
+
+        if(!schem_is_part_used(part)) {
+            continue;
+        }
+
+        part_mbr = &mbr->partitions[i];
+
+        part_mbr->type = part->type.i;
+        part_mbr->start_lba = part->start_lba;
+        part_mbr->sz_lba = part->end_lba - part->start_lba + 1;
+        part_mbr->start_chs = lba_to_chs(img_ctx, part->start_lba);
+        part_mbr->end_chs = lba_to_chs(img_ctx, part->end_lba);
+        part_mbr->boot_ind = part->boot_ind;
+    }
+}
+
+static void mbr_to_schem(struct schem *schem, const struct mbr *mbr,
+                         const struct img_ctx *img_ctx)
+{
+    pu32 i;
+    const struct mbr_part *part_mbr;
+    struct schem_part *part;
+
+    /* Convert scheme details */
+    mbr_init_schem(schem, img_ctx);
+    schem->id.i = mbr->disk_sig;
+
+    /* Convert partitions */
+    for(i = 0; i < schem->part_cnt; i++) {
+        part_mbr = &mbr->partitions[i];
+
+        if(!mbr_is_part_used(part_mbr)) {
+            continue;
+        }
+
+        part = &schem->table[i];
+
+        part->type.i = part_mbr->type;
+        part->start_lba = part_mbr->start_lba;
+        part->end_lba = part_mbr->start_lba + part_mbr->sz_lba - 1;
+        part->boot_ind = part_mbr->boot_ind;
+    }
+}
+
+void schem_init_mbr(struct schem *schem, const struct img_ctx *img_ctx)
+{
+    mbr_init_schem(schem, img_ctx);
+    schem->id.i = rand_32();
+}
+
+enum schem_load_res
+schem_load_mbr(struct schem *schem, const struct img_ctx *img_ctx)
+{
+    struct mbr mbr;
+    enum schem_load_res res;
+
+    res = mbr_load(&mbr, img_ctx);
+    if(res != schem_load_ok) {
+        return res;
     }
 
-    /* Check signature and read MBR */
-    if(mbr_is_present(reg)) {
-        mbr_read(reg, mbr);
-        load_res = mbr_load_ok;
+    mbr_to_schem(schem, &mbr, img_ctx);
 
-        plog_dbg("Loaded MBR");
-    } else {
-        load_res = mbr_load_not_found;
-    }
+    plog_dbg("MBR is detected and loaded");
+    return schem_load_ok;
+}
 
-    /* Unmap MBR sector */
-    res = mbr_unmap(reg, img_ctx);
-    if(!res) {
-        plog_err("Failed to unmap image MBR");
-        return mbr_load_fatal;
-    }
+pres schem_save_mbr(const struct schem *schem, const struct img_ctx *img_ctx)
+{
+    struct mbr mbr;
 
-    return load_res;
+    mbr_from_schem(schem, &mbr, img_ctx);
+
+    return mbr_save(&mbr, img_ctx);
 }
 
 pres mbr_save(const struct mbr *mbr, const struct img_ctx *img_ctx)
@@ -200,5 +241,60 @@ pres mbr_save(const struct mbr *mbr, const struct img_ctx *img_ctx)
     }
 
     return pres_ok;
+}
+
+enum schem_load_res mbr_load(struct mbr *mbr, const struct img_ctx *img_ctx)
+{
+    enum schem_load_res load_res;
+    pres res;
+    pu8 *reg;
+
+    /* Map MBR sector */
+    reg = mbr_map(img_ctx);
+    if(reg == NULL) {
+        plog_err("Failed to map image MBR");
+        return schem_load_fatal;
+    }
+
+    /* Check signature and read MBR */
+    if(mbr_is_present(reg)) {
+        mbr_read(reg, mbr);
+        load_res = schem_load_ok;
+
+        plog_dbg("Loaded MBR");
+    } else {
+        load_res = schem_load_not_found;
+    }
+
+    /* Unmap MBR sector */
+    res = mbr_unmap(reg, img_ctx);
+    if(!res) {
+        plog_err("Failed to unmap image MBR");
+        return schem_load_fatal;
+    }
+
+    return load_res;
+}
+
+void mbr_init_protective(struct mbr *mbr, const struct img_ctx *img_ctx)
+{
+    struct mbr_part *part;
+    plba img_sz_lba;
+
+    img_sz_lba = byte_to_lba(img_ctx, img_ctx->img_sz, 0);
+    if(img_sz_lba > 0xFFFFFFFF) {
+        img_sz_lba = 0x100000000;
+    }
+
+    memset(mbr, 0, sizeof(*mbr));
+
+    part = &mbr->partitions[0];
+
+    part->boot_ind = 0x0;
+    part->type = mbr_part_type_prot;
+    part->start_lba = 1;
+    part->sz_lba = img_sz_lba - part->start_lba;
+    part->start_chs = lba_to_chs(img_ctx, part->start_lba);
+    part->end_chs = lba_to_chs(img_ctx, part->start_lba + part->sz_lba - 1);
 }
 

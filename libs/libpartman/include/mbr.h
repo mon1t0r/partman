@@ -2,12 +2,11 @@
 #define LIBPARTMAN_MBR_H
 
 #include "partman_types.h"
-#include "img_ctx.h"
+#include "schem.h"
 
-enum {
-    /* MBR size, in bytes */
-    mbr_sz = 512
-};
+/* Maximum supported partition count for MBR */
+#define PARTMAN_SCHEM_MAX_PART_CNT_MBR ARRAY_SIZE \
+    (((struct mbr *) 0)->partitions)
 
 /* MBR partition structure */
 struct mbr_part {
@@ -39,25 +38,18 @@ struct mbr {
     struct mbr_part partitions[4];
 };
 
-enum mbr_load_res {
-    mbr_load_ok, mbr_load_not_found, mbr_load_fatal
-};
+void schem_init_mbr(struct schem *schem, const struct img_ctx *img_ctx);
 
-void mbr_init_new(struct mbr *mbr);
+enum schem_load_res
+schem_load_mbr(struct schem *schem, const struct img_ctx *img_ctx);
 
-void mbr_init_protective(struct mbr *mbr, const struct img_ctx *img_ctx);
-
-void mbr_read(const pu8 *buf, struct mbr *mbr);
-
-void mbr_write(pu8 *buf, const struct mbr *mbr);
-
-pflag mbr_is_present(const pu8 *buf);
-
-pflag mbr_is_part_used(const struct mbr_part *part);
-
-enum mbr_load_res mbr_load(struct mbr *mbr, const struct img_ctx *img_ctx);
+pres schem_save_mbr(const struct schem *schem, const struct img_ctx *img_ctx);
 
 pres mbr_save(const struct mbr *mbr, const struct img_ctx *img_ctx);
+
+enum schem_load_res mbr_load(struct mbr *mbr, const struct img_ctx *img_ctx);
+
+void mbr_init_protective(struct mbr *mbr, const struct img_ctx *img_ctx);
 
 #endif
 

@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -6,10 +7,9 @@
 
 #include "gpt.h"
 #include "log.h"
-#include "img_ctx.h"
 #include "memutils.h"
+#include "mbr.h"
 #include "crc32.h"
-#include "partman_types.h"
 
 #define GPT_SIG "EFI PART"
 
@@ -24,6 +24,97 @@ enum {
     gpt_part_ent_sz = 128
 };
 
+/* Default GPT partition type - Linux filesystem */
+const struct guid gpt_part_type_def = {
+    0x0FC63DAF, 0x8483, 0x4772, 0x8E, 0x79,
+    { 0x3D, 0x69, 0xD8, 0x47, 0x7D, 0xE4 }
+};
+
+enum gpt_pair_load_res {
+    gpt_pair_load_ok,
+    gpt_pair_load_hdr_inv,
+    gpt_pair_load_table_inv,
+    gpt_pair_load_fatal
+};
+
+/* GPT partition entry structure */
+struct gpt_part_ent {
+    /* Partition type GUID */
+    struct guid type_guid;
+
+    /* Partition GUID, which is unique for every partition entry */
+    struct guid unique_guid;
+
+    /* LBA of the first sector, used by a partition */
+    plba start_lba;
+
+    /* LBA of the last sector, used by a partition */
+    plba end_lba;
+
+    /* Attributes bit field */
+    pu64 attr;
+
+    /* Name of the partition, using UCS-2 */
+    pchar_ucs name[36];
+};
+
+/* GPT header structure */
+struct gpt_hdr {
+    /* Revision number */
+    pu32 rev;
+
+    /* Header size, in bytes */
+    pu32 hdr_sz;
+
+    /* Header CRC32 checksum */
+    pcrc32 hdr_crc32;
+
+    /* LBA of the primary header */
+    plba my_lba;
+
+    /* LBA of the alternate header */
+    plba alt_lba;
+
+    /* LBA of the first sector, which can be used by a partition */
+    plba first_usable_lba;
+
+    /* LBA of the last sector, which can be used by a partition */
+    plba last_usable_lba;
+
+    /* Disk GUID */
+    struct guid disk_guid;
+
+    /* LBA of the partition entry array */
+    plba part_table_lba;
+
+    /* Number of partition entries in the partition entry array */
+    pu32 part_table_entry_cnt;
+
+    /* Partition entry size, in bytes */
+    pu32 part_entry_sz;
+
+    /* Partition entry array CRC32 checksum */
+    pcrc32 part_table_crc32;
+};
+
+/* GUID Partition Table (GPT) structure */
+struct gpt {
+    /* In-memory protective MBR structure */
+    struct mbr mbr_prot;
+
+    /* In-memory GPT primary header structure */
+    struct gpt_hdr hdr_prim;
+
+    /* In-memory GPT primary table structure */
+    struct gpt_part_ent *table_prim;
+
+    /* In-memory GPT secondary header structure */
+    struct gpt_hdr hdr_sec;
+
+    /* In-memory GPT secondary table structure */
+    struct gpt_part_ent *table_sec;
+};
+
 static long byte_to_page(pu64 bytes, pflag round_up)
 {
     long pg_sz = sysconf(_SC_PAGESIZE);
@@ -33,6 +124,36 @@ static long byte_to_page(pu64 bytes, pflag round_up)
 static pu64 page_to_byte(long pages)
 {
     return pages * sysconf(_SC_PAGESIZE);
+}
+
+static pres unmap_secs(pu8 *reg, const struct img_ctx *ctx, plba off_lba,
+                       plba secs_cnt)
+{
+    int c;
+    pu64 off_bytes;
+    long off_pages;
+    long align_off;
+    long len_pages;
+
+    /* Memory region offset, in bytes */
+    off_bytes = lba_to_byte(ctx, off_lba);
+
+    /* Memory region offset, in pages (aligned, to lower) */
+    off_pages = byte_to_page(off_bytes, 0);
+
+    /* Alignment offset, in bytes (how many bytes offset moved back) */
+    align_off = off_bytes - page_to_byte(off_pages);
+
+    /* Memory region length, in pages (aligned, to higher)  */
+    len_pages = byte_to_page(lba_to_byte(ctx, secs_cnt) + align_off, 1);
+
+    c = munmap(reg - align_off, len_pages);
+    if(c == -1) {
+        perror("munmap()");
+        return pres_fail;
+    }
+
+    return pres_ok;
 }
 
 static pu8 *map_secs(const struct img_ctx *ctx, plba off_lba, plba secs_cnt)
@@ -64,36 +185,6 @@ static pu8 *map_secs(const struct img_ctx *ctx, plba off_lba, plba secs_cnt)
 
     /* Return address moved forward with alignment offset */
     return reg + align_off;
-}
-
-static pres unmap_secs(pu8 *reg, const struct img_ctx *ctx, plba off_lba,
-                       plba secs_cnt)
-{
-    int c;
-    pu64 off_bytes;
-    long off_pages;
-    long align_off;
-    long len_pages;
-
-    /* Memory region offset, in bytes */
-    off_bytes = lba_to_byte(ctx, off_lba);
-
-    /* Memory region offset, in pages (aligned, to lower) */
-    off_pages = byte_to_page(off_bytes, 0);
-
-    /* Alignment offset, in bytes (how many bytes offset moved back) */
-    align_off = off_bytes - page_to_byte(off_pages);
-
-    /* Memory region length, in pages (aligned, to higher)  */
-    len_pages = byte_to_page(lba_to_byte(ctx, secs_cnt) + align_off, 1);
-
-    c = munmap(reg - align_off, len_pages);
-    if(c == -1) {
-        perror("munmap()");
-        return pres_fail;
-    }
-
-    return pres_ok;
 }
 
 static void gpt_part_ent_crc_compute(pcrc32 *crc32,
@@ -206,72 +297,29 @@ static void gpt_part_ent_read(const pu8 *buf, struct gpt_part_ent *entry)
     }
 }
 
-void gpt_init_new(struct gpt_hdr *hdr_prim, struct gpt_hdr *hdr_sec,
-                  struct gpt_part_ent table_prim[],
-                  struct gpt_part_ent table_sec[],
-                  const struct img_ctx *img_ctx)
+static void gpt_table_write(pu8 *buf, const struct gpt_part_ent table[],
+                            pu32 table_len, pu32 entry_sz)
 {
-    plba hdr_lba_prim;
-    plba hdr_lba_sec;
-    plba table_sz;
-    plba table_lba_prim;
-    plba table_lba_sec;
+    pu32 i;
 
-    memset(hdr_prim, 0, sizeof(*hdr_prim));
-    guid_create(&hdr_prim->disk_guid);
-    hdr_prim->rev = gpt_hdr_rev;
-    hdr_prim->hdr_sz = gpt_hdr_sz;
-
-    /* Primary GPT header is located at LBA 1 */
-    hdr_lba_prim = 1;
-
-    /* Secondary GPT header is located at image last LBA */
-    hdr_lba_sec = byte_to_lba(img_ctx, img_ctx->img_sz, 0) - 1;
-
-    /* GPT table size */
-    table_sz = byte_to_lba(img_ctx, gpt_part_cnt * gpt_part_ent_sz, 1);
-
-    /* Primary GPT table is located after primary GPT header */
-    table_lba_prim = hdr_lba_prim + 1;
-
-    /* Secondary GPT table is located before secondary GPT header */
-    table_lba_sec = hdr_lba_sec - table_sz;
-
-    hdr_prim->my_lba = hdr_lba_prim;
-    hdr_prim->alt_lba = hdr_lba_sec;
-    hdr_prim->first_usable_lba = table_lba_prim + table_sz;
-    hdr_prim->last_usable_lba = table_lba_sec - 1;
-    hdr_prim->part_table_lba = table_lba_prim;
-    hdr_prim->part_table_entry_cnt = gpt_part_cnt;
-    hdr_prim->part_entry_sz = gpt_part_ent_sz;
-
-    /* Create secondary GPT header */
-    gpt_restore(hdr_sec, table_sec, table_lba_sec, hdr_prim, table_prim);
+    /* Maximum supported number of partitions limit */
+    for(i = 0; i < table_len && i < gpt_max_part_cnt; i++) {
+        gpt_part_ent_write(&buf[i * entry_sz], &table[i]);
+    }
 }
 
-void gpt_hdr_read(const pu8 *buf, struct gpt_hdr *hdr)
+static void gpt_table_read(const pu8 *buf, struct gpt_part_ent table[],
+                           pu32 table_len, pu32 entry_sz)
 {
-    hdr->rev       = read_pu32(buf + 8);
-    hdr->hdr_sz    = read_pu32(buf + 12);
-    hdr->hdr_crc32 = read_pu32(buf + 16);
+    pu32 i;
 
-    /* Reserved, 4 bytes */
-
-    hdr->my_lba           = read_pu64(buf + 24);
-    hdr->alt_lba          = read_pu64(buf + 32);
-    hdr->first_usable_lba = read_pu64(buf + 40);
-    hdr->last_usable_lba  = read_pu64(buf + 48);
-
-    /* Disk GUID */
-    guid_read(buf + 56, &hdr->disk_guid);
-
-    hdr->part_table_lba       = read_pu64(buf + 72);
-    hdr->part_table_entry_cnt = read_pu32(buf + 80);
-    hdr->part_entry_sz        = read_pu32(buf + 84);
-    hdr->part_table_crc32     = read_pu32(buf + 88);
+    /* Maximum supported number of partitions limit */
+    for(i = 0; i < table_len && i < gpt_max_part_cnt; i++) {
+        gpt_part_ent_read(&buf[i * entry_sz], &table[i]);
+    }
 }
 
-void gpt_hdr_write(pu8 *buf, const struct gpt_hdr *hdr)
+static void gpt_hdr_write(pu8 *buf, const struct gpt_hdr *hdr)
 {
     int i;
 
@@ -301,67 +349,53 @@ void gpt_hdr_write(pu8 *buf, const struct gpt_hdr *hdr)
     write_pu32(buf + 88, hdr->part_table_crc32);
 }
 
-void gpt_table_write(pu8 *buf, const struct gpt_part_ent table[],
-                     pu32 table_len, pu32 entry_sz)
+static void gpt_hdr_read(const pu8 *buf, struct gpt_hdr *hdr)
+{
+    hdr->rev       = read_pu32(buf + 8);
+    hdr->hdr_sz    = read_pu32(buf + 12);
+    hdr->hdr_crc32 = read_pu32(buf + 16);
+
+    /* Reserved, 4 bytes */
+
+    hdr->my_lba           = read_pu64(buf + 24);
+    hdr->alt_lba          = read_pu64(buf + 32);
+    hdr->first_usable_lba = read_pu64(buf + 40);
+    hdr->last_usable_lba  = read_pu64(buf + 48);
+
+    /* Disk GUID */
+    guid_read(buf + 56, &hdr->disk_guid);
+
+    hdr->part_table_lba       = read_pu64(buf + 72);
+    hdr->part_table_entry_cnt = read_pu32(buf + 80);
+    hdr->part_entry_sz        = read_pu32(buf + 84);
+    hdr->part_table_crc32     = read_pu32(buf + 88);
+}
+
+static void gpt_free(struct gpt *gpt)
+{
+    free(gpt->table_prim);
+    free(gpt->table_sec);
+}
+
+static void gpt_restore(struct gpt *gpt, plba table_dst_lba,
+                        pflag restore_primary)
 {
     pu32 i;
 
-    /* Maximum supported number of partitions limit */
-    for(i = 0; i < table_len && i < gpt_part_cnt; i++) {
-        gpt_part_ent_write(&buf[i * entry_sz], &table[i]);
+    struct gpt_hdr *hdr_dst, *hdr_src;
+    struct gpt_part_ent *table_dst, *table_src;
+
+    if(restore_primary) {
+        hdr_dst = &gpt->hdr_prim;
+        hdr_src = &gpt->hdr_sec;
+        table_dst = gpt->table_prim;
+        table_src = gpt->table_sec;
+    } else {
+        hdr_dst = &gpt->hdr_sec;
+        hdr_src = &gpt->hdr_prim;
+        table_dst = gpt->table_sec;
+        table_src = gpt->table_prim;
     }
-}
-
-void gpt_table_read(const pu8 *buf, struct gpt_part_ent table[],
-                    pu32 table_len, pu32 entry_sz)
-{
-    pu32 i;
-
-    /* Maximum supported number of partitions limit */
-    for(i = 0; i < table_len && i < gpt_part_cnt; i++) {
-        gpt_part_ent_read(&buf[i * entry_sz], &table[i]);
-    }
-}
-
-void gpt_crc_fill_table(struct gpt_hdr *hdr, const struct gpt_part_ent table[])
-{
-    hdr->part_table_crc32 = gpt_table_crc_create(table,
-                                                 hdr->part_table_entry_cnt);
-}
-
-void gpt_crc_fill_hdr(struct gpt_hdr *hdr)
-{
-    hdr->hdr_crc32 = gpt_hdr_crc_create(hdr);
-}
-
-pflag gpt_is_present(const pu8 *buf)
-{
-    return 0 == strncmp((const char *) buf, GPT_SIG, ARRAY_SIZE(GPT_SIG) - 1);
-}
-
-pflag gpt_hdr_is_valid(const struct gpt_hdr *hdr, plba hdr_lba)
-{
-    return hdr->hdr_crc32 == gpt_hdr_crc_create(hdr) &&
-           hdr->my_lba == hdr_lba;
-}
-
-pflag gpt_table_is_valid(const struct gpt_hdr *hdr,
-                         const struct gpt_part_ent table[])
-{
-    return hdr->part_table_crc32 ==
-           gpt_table_crc_create(table, hdr->part_table_entry_cnt);
-}
-
-pflag gpt_is_part_used(const struct gpt_part_ent *part)
-{
-    return !guid_is_zero(&part->type_guid);
-}
-
-void gpt_restore(struct gpt_hdr *hdr_dst, struct gpt_part_ent table_dst[],
-                 plba table_dst_lba, const struct gpt_hdr *hdr_src,
-                 const struct gpt_part_ent table_src[])
-{
-    pu32 i;
 
     memcpy(hdr_dst, hdr_src, sizeof(*hdr_src));
     hdr_dst->my_lba = hdr_src->alt_lba;
@@ -371,96 +405,35 @@ void gpt_restore(struct gpt_hdr *hdr_dst, struct gpt_part_ent table_dst[],
     for(i = 0; i < hdr_src->part_table_entry_cnt; i++) {
         memcpy(&table_dst[i], &table_src[i], sizeof(table_src[i]));
     }
+
+    hdr_dst->hdr_crc32 = gpt_hdr_crc_create(hdr_dst);
 }
 
-enum gpt_load_res gpt_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],
-                           const struct img_ctx *img_ctx, plba hdr_lba)
+static pflag gpt_table_is_valid(const struct gpt_hdr *hdr,
+                         const struct gpt_part_ent table[])
 {
-    enum gpt_load_res load_res;
-    pres res;
-    pu8 *hdr_reg = NULL;
-    pu8 *table_reg = NULL;
-    plba hdr_sz_secs;
-    plba table_sz_secs;
-    plba table_lba;
-
-    /* GPT header size */
-    hdr_sz_secs = 1;
-
-    /* Map GPT header sector */
-    hdr_reg = map_secs(img_ctx, hdr_lba, hdr_sz_secs);
-    if(hdr_reg == NULL) {
-        plog_err("Failed to map GPT header at sector %llu", hdr_lba);
-        load_res = gpt_load_fatal;
-        goto exit;
-    }
-
-    /* Check GPT header signature */
-    if(!gpt_is_present(hdr_reg)) {
-        load_res = gpt_load_hdr_inv;
-        goto exit;
-    }
-
-    /* Read GPT header */
-    gpt_hdr_read(hdr_reg, hdr);
-
-    /* Check GPT header CRC */
-    if(!gpt_hdr_is_valid(hdr, hdr_lba)) {
-        load_res = gpt_load_hdr_inv;
-        goto exit;
-    }
-
-    /* Get GPT table LBA and size */
-    table_lba = hdr->part_table_lba;
-    table_sz_secs = byte_to_lba(img_ctx, hdr->part_table_entry_cnt *
-                                hdr->part_entry_sz, 1);
-
-    /* Map GPT table sectors */
-    table_reg = map_secs(img_ctx, table_lba, table_sz_secs);
-    if(table_reg == NULL) {
-        plog_err("Failed to map GPT table at sector %llu", table_lba);
-        load_res = gpt_load_fatal;
-        goto exit;
-    }
-
-    /* Read GPT table */
-    gpt_table_read(table_reg, table, hdr->part_table_entry_cnt,
-                   hdr->part_entry_sz);
-
-    /* Check GPT table CRC */
-    if(!gpt_table_is_valid(hdr, table)) {
-        load_res = gpt_load_table_inv;
-        goto exit;
-    }
-
-    plog_dbg("Loaded GPT: header/table %llu/%llu", hdr_lba, table_lba);
-
-    /* Loaded successfully */
-    load_res = gpt_load_ok;
-
-exit:
-    /* If mapped, unmap GPT header sector */
-    if(hdr_reg) {
-        res = unmap_secs(hdr_reg, img_ctx, hdr_lba, hdr_sz_secs);
-        if(!res) {
-            plog_err("Failed to unmap GPT header at sector %llu", hdr_lba);
-            return gpt_load_fatal;
-        }
-    }
-
-    /* If mapped, unmap GPT table sectors */
-    if(table_reg) {
-        res = unmap_secs(table_reg, img_ctx, table_lba, table_sz_secs);
-        if(!res) {
-            plog_err("Failed to unmap GPT table at sector %llu", table_lba);
-            return gpt_load_fatal;
-        }
-    }
-
-    return load_res;
+    return hdr->part_table_crc32 ==
+           gpt_table_crc_create(table, hdr->part_table_entry_cnt);
 }
 
-pres gpt_save(const struct gpt_hdr *hdr, const struct gpt_part_ent table[],
+static pflag gpt_hdr_is_valid(const struct gpt_hdr *hdr, plba hdr_lba)
+{
+    return hdr->hdr_crc32 == gpt_hdr_crc_create(hdr) &&
+           hdr->my_lba == hdr_lba;
+}
+
+static pflag gpt_is_part_used(const struct gpt_part_ent *part)
+{
+    return !guid_is_zero(&part->type_guid);
+}
+
+static pflag gpt_is_present(const pu8 *buf)
+{
+    return 0 == strncmp((const char *) buf, GPT_SIG, ARRAY_SIZE(GPT_SIG) - 1);
+}
+
+static pres
+gpt_pair_save(const struct gpt_hdr *hdr, const struct gpt_part_ent table[],
               const struct img_ctx *img_ctx)
 {
     pres save_res;
@@ -529,5 +502,392 @@ exit:
     }
 
     return save_res;
+}
+
+static enum gpt_pair_load_res
+gpt_pair_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],
+              const struct img_ctx *img_ctx, plba hdr_lba)
+{
+    enum gpt_pair_load_res load_res;
+    pres res;
+    pu8 *hdr_reg = NULL;
+    pu8 *table_reg = NULL;
+    plba hdr_sz_secs;
+    plba table_sz_secs;
+    plba table_lba;
+
+    /* GPT header size */
+    hdr_sz_secs = 1;
+
+    /* Map GPT header sector */
+    hdr_reg = map_secs(img_ctx, hdr_lba, hdr_sz_secs);
+    if(hdr_reg == NULL) {
+        plog_err("Failed to map GPT header at sector %llu", hdr_lba);
+        load_res = gpt_pair_load_fatal;
+        goto exit;
+    }
+
+    /* Check GPT header signature */
+    if(!gpt_is_present(hdr_reg)) {
+        load_res = gpt_pair_load_hdr_inv;
+        goto exit;
+    }
+
+    /* Read GPT header */
+    gpt_hdr_read(hdr_reg, hdr);
+
+    /* Check GPT header CRC */
+    if(!gpt_hdr_is_valid(hdr, hdr_lba)) {
+        load_res = gpt_pair_load_hdr_inv;
+        goto exit;
+    }
+
+    /* Get GPT table LBA and size */
+    table_lba = hdr->part_table_lba;
+    table_sz_secs = byte_to_lba(img_ctx, hdr->part_table_entry_cnt *
+                                hdr->part_entry_sz, 1);
+
+    /* Map GPT table sectors */
+    table_reg = map_secs(img_ctx, table_lba, table_sz_secs);
+    if(table_reg == NULL) {
+        plog_err("Failed to map GPT table at sector %llu", table_lba);
+        load_res = gpt_pair_load_fatal;
+        goto exit;
+    }
+
+    /* Read GPT table */
+    gpt_table_read(table_reg, table, hdr->part_table_entry_cnt,
+                   hdr->part_entry_sz);
+
+    /* Check GPT table CRC */
+    if(!gpt_table_is_valid(hdr, table)) {
+        load_res = gpt_pair_load_table_inv;
+        goto exit;
+    }
+
+    plog_dbg("Loaded GPT: header/table %llu/%llu", hdr_lba, table_lba);
+
+    /* Loaded successfully */
+    load_res = gpt_pair_load_ok;
+
+exit:
+    /* If mapped, unmap GPT header sector */
+    if(hdr_reg) {
+        res = unmap_secs(hdr_reg, img_ctx, hdr_lba, hdr_sz_secs);
+        if(!res) {
+            plog_err("Failed to unmap GPT header at sector %llu", hdr_lba);
+            return gpt_pair_load_fatal;
+        }
+    }
+
+    /* If mapped, unmap GPT table sectors */
+    if(table_reg) {
+        res = unmap_secs(table_reg, img_ctx, table_lba, table_sz_secs);
+        if(!res) {
+            plog_err("Failed to unmap GPT table at sector %llu", table_lba);
+            return gpt_pair_load_fatal;
+        }
+    }
+
+    return load_res;
+}
+
+static pres gpt_save(const struct gpt *gpt, const struct img_ctx *img_ctx)
+{
+    pres res;
+
+    /* Save protective MBR */
+    res = mbr_save(&gpt->mbr_prot, img_ctx);
+    if(!res) {
+        return pres_fail;
+    }
+
+    /* UEFI specification requires to update secondary GPT first */
+    res = gpt_pair_save(&gpt->hdr_sec, gpt->table_sec, img_ctx);
+    if(!res) {
+        return pres_fail;
+    }
+
+    res = gpt_pair_save(&gpt->hdr_prim, gpt->table_prim, img_ctx);
+    if(!res) {
+        return pres_fail;
+    }
+
+    plog_dbg("GPT saved");
+    return pres_ok;
+}
+
+static enum schem_load_res
+gpt_load(struct gpt *gpt, const struct img_ctx *img_ctx)
+{
+    enum schem_load_res res;
+    enum gpt_pair_load_res gpt_res_prim;
+    enum gpt_pair_load_res gpt_res_sec;
+    plba gpt_lba_sec;
+    plba gpt_table_lba;
+
+    /* Allocate tables */
+    gpt->table_prim = calloc(gpt_max_part_cnt, sizeof(struct gpt_part_ent));
+    gpt->table_sec = calloc(gpt_max_part_cnt, sizeof(struct gpt_part_ent));
+
+    if(gpt->table_prim == NULL || gpt->table_sec == NULL) {
+        return schem_load_fatal;
+    }
+
+    /* Load primary GPT, located at LBA 1 */
+    gpt_res_prim = gpt_pair_load(&gpt->hdr_prim, gpt->table_prim, img_ctx, 1);
+    if(gpt_res_prim == gpt_pair_load_fatal) {
+        plog_err("Error while loading primary GPT");
+        res = schem_load_fatal;
+        goto exit;
+    }
+
+    /* If primary GPT loaded successfully, use alt_lba, otherwise use
+     * last image LBA to locate secondary GPT */
+    if(gpt_res_prim == gpt_pair_load_ok) {
+        gpt_lba_sec = gpt->hdr_prim.alt_lba;
+    } else {
+        gpt_lba_sec = byte_to_lba(img_ctx, img_ctx->img_sz, 0) - 1;
+    }
+
+    /* Load secondary GPT */
+    gpt_res_sec = gpt_pair_load(&gpt->hdr_sec, gpt->table_sec, img_ctx,
+                                gpt_lba_sec);
+    if(gpt_res_sec == gpt_pair_load_fatal) {
+        plog_err("Error while loading secondary GPT");
+        res = schem_load_fatal;
+        goto exit;
+    }
+
+    /* Both GPTs are not present or are corrupted */
+    if(gpt_res_prim != gpt_pair_load_ok && gpt_res_sec != gpt_pair_load_ok) {
+        res = schem_load_not_found;
+        goto exit;
+    }
+
+    /* Primary GPT is ok, secondary GPT is corrupted */
+    if(gpt_res_prim == gpt_pair_load_ok && gpt_res_sec != gpt_pair_load_ok) {
+        plog_info("Secondary GPT is corrupted and will be restored on the "
+                  "next write");
+
+        /* Secondary GPT table LBA */
+        gpt_table_lba = gpt->hdr_prim.alt_lba -
+                        byte_to_lba(img_ctx,
+                                    gpt->hdr_prim.part_table_entry_cnt *
+                                    gpt->hdr_prim.part_entry_sz, 1);
+        /* Restore secondary GPT */
+        gpt_restore(gpt, gpt_table_lba, 0);
+
+        res = schem_load_ok;
+        goto mbr;
+    }
+
+    /* Primary GPT is corrupted, secondary GPT is ok */
+    if(gpt_res_prim != gpt_pair_load_ok && gpt_res_sec == gpt_pair_load_ok) {
+        plog_info("Primary GPT is corrupted and will be restored on the "
+                  "next write");
+
+        /* Primary GPT table LBA */
+        gpt_table_lba = gpt->hdr_sec.alt_lba + 1;
+
+        /* Restore primary GPT */
+        gpt_restore(gpt, gpt_table_lba, 1);
+
+        res = schem_load_ok;
+        goto mbr;
+    }
+
+    /* Primary GPT is ok, secondary GPT is ok */
+
+mbr:
+    /* Load protective MBR */
+    res = mbr_load(&gpt->mbr_prot, img_ctx);
+    if(res == schem_load_fatal) {
+        plog_err("Error while loading protective MBR");
+        goto exit;
+    }
+
+    if(res != schem_load_ok) {
+        plog_info("Protective MBR not found and will be created on the "
+                  "next write");
+
+        /* Initialize new protective MBR */
+        mbr_init_protective(&gpt->mbr_prot, img_ctx);
+    } else {
+        plog_dbg("Protective MBR detected and loaded");
+    }
+
+    res = schem_load_ok;
+    plog_dbg("GPT loaded");
+
+exit:
+    if(res != schem_load_ok) {
+        free(gpt->table_prim);
+        free(gpt->table_sec);
+    }
+
+    return res;
+}
+
+static void gpt_calc_pos(const struct img_ctx *img_ctx,
+                         plba *hdr_lba_prim, plba *hdr_lba_sec,
+                         plba *table_lba_prim, plba *table_lba_sec,
+                         plba *table_sz)
+{
+    /* Primary GPT header is located at LBA 1 */
+    *hdr_lba_prim = 1;
+
+    /* Secondary GPT header is located at image last LBA */
+    *hdr_lba_sec = byte_to_lba(img_ctx, img_ctx->img_sz, 0) - 1;
+
+    /* GPT table size */
+    *table_sz = byte_to_lba(img_ctx, gpt_max_part_cnt * gpt_part_ent_sz, 1);
+
+    /* Primary GPT table is located after primary GPT header */
+    *table_lba_prim = *hdr_lba_prim + 1;
+
+    /* Secondary GPT table is located before secondary GPT header */
+    *table_lba_sec = *hdr_lba_sec - *table_sz;
+}
+
+static void gpt_from_schem(const struct schem *schem, struct gpt *gpt,
+                           const struct img_ctx *img_ctx)
+{
+    plba hdr_lba_prim;
+    plba hdr_lba_sec;
+    plba table_lba_prim;
+    plba table_lba_sec;
+    plba table_sz;
+    pu32 i;
+    struct gpt_part_ent *part_gpt;
+    const struct schem_part *part;
+
+    gpt_calc_pos(img_ctx, &hdr_lba_prim, &hdr_lba_sec, &table_lba_prim,
+                 &table_lba_sec, &table_sz);
+
+    /* Convert scheme details */
+    gpt->hdr_prim.rev = gpt_hdr_rev;
+    gpt->hdr_prim.hdr_sz = gpt_hdr_sz;
+    gpt->hdr_prim.my_lba = hdr_lba_prim;
+    gpt->hdr_prim.alt_lba = hdr_lba_sec;
+    gpt->hdr_prim.first_usable_lba = schem->first_usable_lba;
+    gpt->hdr_prim.last_usable_lba = schem->last_usable_lba;
+    gpt->hdr_prim.part_table_lba = table_lba_prim;
+    gpt->hdr_prim.part_table_entry_cnt = schem->part_cnt;
+    gpt->hdr_prim.part_entry_sz = gpt_part_ent_sz;
+
+    memcpy(&gpt->hdr_prim.disk_guid, &schem->id.guid, sizeof(struct guid));
+
+    /* Compute GPT table CRC */
+    gpt->hdr_prim.part_table_crc32 =
+        gpt_table_crc_create(gpt->table_prim,
+                             gpt->hdr_prim.part_table_entry_cnt);
+
+    /* Compute GPT header CRC */
+    gpt->hdr_prim.hdr_crc32 = gpt_hdr_crc_create(&gpt->hdr_prim);
+
+    /* Restore GPT secondary header and table */
+    gpt_restore(gpt, table_lba_sec, 0);
+
+    /* Convert partitions */
+    for(i = 0; i < schem->part_cnt; i++) {
+        part = &schem->table[i];
+
+        if(!schem_is_part_used(part)) {
+            continue;
+        }
+
+        part_gpt = &gpt->table_prim[i];
+
+        memcpy(&part_gpt->type_guid, &part->type.guid, sizeof(struct guid));
+        memcpy(&part_gpt->unique_guid, &part->unique_guid,
+               sizeof(struct guid));
+
+        part_gpt->start_lba = part->start_lba;
+        part_gpt->end_lba = part->end_lba;
+        part_gpt->attr = part->attr;
+        memcpy(&part_gpt->name, &part->name, sizeof(part_gpt->name));
+    }
+}
+
+static void gpt_to_schem(struct schem *schem, const struct gpt *gpt)
+{
+    pu32 i;
+    const struct gpt_part_ent *part_gpt;
+    struct schem_part *part;
+
+    /* Convert scheme details */
+    schem->type = schem_type_gpt;
+    memcpy(&schem->id.guid, &gpt->hdr_prim.disk_guid, sizeof(struct guid));
+    schem->first_usable_lba = gpt->hdr_prim.first_usable_lba;
+    schem->last_usable_lba = gpt->hdr_prim.last_usable_lba;
+    schem->part_cnt = gpt->hdr_prim.part_table_entry_cnt;
+
+    /* Convert partitions */
+    for(i = 0; i < schem->part_cnt; i++) {
+        part_gpt = &gpt->table_prim[i];
+
+        if(!gpt_is_part_used(part_gpt)) {
+            continue;
+        }
+
+        part = &schem->table[i];
+
+        memcpy(&part->type.guid, &part_gpt->type_guid, sizeof(struct guid));
+        memcpy(&part->unique_guid, &part_gpt->unique_guid,
+               sizeof(struct guid));
+
+        part->start_lba = part_gpt->start_lba;
+        part->end_lba = part_gpt->end_lba;
+        part->attr = part_gpt->attr;
+
+        memcpy(&part->name, &part_gpt->name, sizeof(part_gpt->name));
+    }
+}
+
+void schem_init_gpt(struct schem *schem, const struct img_ctx *img_ctx)
+{
+    plba hdr_lba_prim;
+    plba hdr_lba_sec;
+    plba table_lba_prim;
+    plba table_lba_sec;
+    plba table_sz;
+
+    gpt_calc_pos(img_ctx, &hdr_lba_prim, &hdr_lba_sec, &table_lba_prim,
+                 &table_lba_sec, &table_sz);
+
+    schem->type = schem_type_gpt;
+    schem->first_usable_lba = table_lba_prim + table_sz;
+    schem->last_usable_lba = table_lba_sec - 1;
+    schem->part_cnt = gpt_max_part_cnt;
+    guid_create(&schem->id.guid);
+}
+
+enum schem_load_res
+schem_load_gpt(struct schem *schem, const struct img_ctx *img_ctx)
+{
+    struct gpt gpt;
+    enum schem_load_res res;
+
+    res = gpt_load(&gpt, img_ctx);
+    if(res != schem_load_ok) {
+        return res;
+    }
+
+    gpt_to_schem(schem, &gpt);
+
+    gpt_free(&gpt);
+
+    plog_dbg("GPT is detected and loaded");
+    return schem_load_ok;
+}
+
+pres schem_save_gpt(const struct schem *schem, const struct img_ctx *img_ctx)
+{
+    struct gpt gpt;
+
+    gpt_from_schem(schem, &gpt, img_ctx);
+
+    return gpt_save(&gpt, img_ctx);
 }
 

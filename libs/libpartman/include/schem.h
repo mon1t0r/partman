@@ -1,164 +1,78 @@
-#ifndef LIBPARTMAN_SCHEME_H
-#define LIBPARTMAN_SCHEME_H
+#ifndef LIBPARTMAN_SCHEM_H
+#define LIBPARTMAN_SCHEM_H
 
-#include "mbr.h"
-#include "gpt.h"
 #include "img_ctx.h"
-
-/* === Scheme definitions === */
-
-/* MBR partitioning scheme */
-struct schem_mbr {
-    /* MBR */
-    struct mbr mbr;
-};
-
-/* GPT partitioning scheme */
-struct schem_gpt {
-    /* Protective MBR */
-    struct mbr mbr_prot;
-
-    /* GPT */
-    struct gpt gpt;
-};
+#include "guid.h"
 
 /* Partitioning scheme type */
 enum schem_type {
     schem_type_none, schem_type_mbr, schem_type_gpt
 };
 
-/* Partitioning scheme union */
-union schem {
-    struct schem_mbr s_mbr;
-    struct schem_gpt s_gpt;
+/* Partitioning scheme load result */
+enum schem_load_res {
+    schem_load_ok, schem_load_not_found, schem_load_fatal
 };
 
-/* === Scheme internals === */
-
-/* Abstract partition structure */
+/* Unified scheme partition structure */
 struct schem_part {
+    /* Partition type: integer (MBR) or GUID (GPT) */
+    union {
+        pu8 i;
+        struct guid guid;
+    } type;
+
+    /* GPT: Partition GUID */
+    struct guid unique_guid;
+
     /* Partition start LBA */
     plba start_lba;
 
     /* Partition end LBA */
     plba end_lba;
+
+    /* GPT: Partition attributes */
+    pu64 attr;
+
+    /* GPT: Name of the partition, using UCS-2 */
+    pchar_ucs name[36];
+
+    /* MBR: Partition boot indicator */
+    pu8 boot_ind;
 };
 
-/* Scheme info structure */
-struct schem_info {
+/* Unified scheme structure */
+struct schem {
+    /* Scheme type */
+    enum schem_type type;
+
+    /* Disk identifier: integer (MBR) or GUID (GPT) */
+    union {
+        pu32 i;
+        struct guid guid;
+    } id;
+
     /* First usable LBA */
     plba first_usable_lba;
 
     /* Last usable LBA */
     plba last_usable_lba;
 
-    /* Partition count */
+    /* Total partition count (with unsued partitions) */
     pu32 part_cnt;
+
+    /* Partition table */
+    struct schem_part *table;
 };
 
-/* Scheme function types */
-typedef
-pres (*schem_func_init) (
-    union schem             *schem,
-    const struct img_ctx    *img_ctx
-);
+pflag schem_is_part_used(const struct schem_part *part);
 
-typedef
-void (*schem_func_sync) (
-    union schem             *schem
-);
+void schem_init(struct schem *schem);
 
-typedef
-void (*schem_func_get_info) (
-    const union schem       *schem,
-    const struct img_ctx    *img_ctx,
-    struct schem_info       *info
-);
+pres schem_change_type(struct schem *schem, const struct img_ctx *img_ctx,
+                       enum schem_type type);
 
-typedef
-pflag (*schem_func_part_is_used) (
-    const union schem       *schem,
-    pu32                    index
-);
-
-typedef
-void (*schem_func_part_new) (
-    union schem             *schem,
-    pu32                    index
-);
-
-typedef
-void (*schem_func_part_delete) (
-    union schem             *schem,
-    pu32                    index
-);
-
-typedef
-void (*schem_func_part_get) (
-    const union schem       *schem,
-    pu32                    index,
-    struct schem_part       *part
-);
-
-typedef
-void (*schem_func_part_set) (
-    union schem             *schem,
-    const struct img_ctx    *img_ctx,
-    pu32                    index,
-    const struct schem_part *part
-);
-
-typedef
-pres (*schem_func_save) (
-    const union schem       *schem,
-    const struct img_ctx    *img_ctx
-);
-
-typedef
-void (*schem_func_free) (
-    union schem             *schem
-);
-
-/* (!) Functions 'sync', 'init' and 'free' may not be implemented */
-
-/* Pointers to common scheme functions, which can be called from outside */
-struct schem_funcs {
-    schem_func_sync         sync;
-    schem_func_get_info     get_info;
-    schem_func_part_is_used part_is_used;
-    schem_func_part_new     part_new;
-    schem_func_part_delete  part_delete;
-    schem_func_part_get     part_get;
-    schem_func_part_set     part_set;
-    schem_func_save         save;
-};
-
-/* Pointers to common scheme functions, which are internal to scheme context */
-struct schem_funcs_int {
-    schem_func_init init;
-    schem_func_free free;
-};
-
-struct schem_ctx {
-    /* Partitioning scheme type */
-    enum schem_type        type;
-
-    /* Partitioning scheme public used functions, depends on type */
-    struct schem_funcs     funcs;
-
-    /* Partitioning scheme internal used functions, depends on type */
-    struct schem_funcs_int funcs_int;
-
-    /* Partitioning scheme used, depends on type */
-    union schem            s;
-};
-
-void schem_init(struct schem_ctx *schem_ctx);
-
-pres schem_change_type(struct schem_ctx *schem_ctx,
-                       const struct img_ctx *img_ctx, enum schem_type type);
-
-pres schem_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx);
+pres schem_load(struct schem *schem, const struct img_ctx *img_ctx);
 
 p32 schem_find_overlap(const struct schem_ctx *schem_ctx, pu32 part_cnt,
                        const struct schem_part *part, p32 part_ign);
