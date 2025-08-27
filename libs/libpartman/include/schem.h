@@ -14,6 +14,69 @@ enum schem_load_res {
     schem_load_ok, schem_load_not_found, schem_load_fatal
 };
 
+struct schem;
+
+struct schem_part;
+
+/* Partitioning scheme function type definitions */
+typedef void (*schem_func_init) (
+    struct schem            *schem,
+    const struct img_ctx    *img_ctx
+);
+
+typedef void (*schem_func_part_init) (
+    struct schem_part       *part
+);
+
+typedef pflag (*schem_func_part_is_used) (
+    const struct schem_part *part
+);
+
+typedef enum schem_load_res (*schem_func_load) (
+    struct schem            *schem,
+    const struct img_ctx    *img_ctx
+);
+
+typedef pres (*schem_func_save) (
+    const struct schem      *schem,
+    const struct img_ctx    *img_ctx
+);
+
+/* Unified scheme functions structure (contains function pointers) */
+struct schem_funcs {
+    schem_func_init         init;
+    schem_func_part_init    part_init;
+    schem_func_part_is_used part_is_used;
+    schem_func_load         load;
+    schem_func_save         save;
+};
+
+/* Unified scheme structure */
+struct schem {
+    /* Scheme type */
+    enum schem_type type;
+
+    /* Disk identifier: integer (MBR) or GUID (GPT) */
+    union {
+        pu32 i;
+        struct guid guid;
+    } id;
+
+    /* First usable LBA */
+    plba first_usable_lba;
+
+    /* Last usable LBA */
+    plba last_usable_lba;
+
+    /* Total partition count (with unsued partitions) */
+    pu32 part_cnt;
+
+    /* Partition table */
+    struct schem_part *table;
+
+    struct schem_funcs funcs;
+};
+
 /* Unified scheme partition structure */
 struct schem_part {
     /* Partition type: integer (MBR) or GUID (GPT) */
@@ -40,32 +103,6 @@ struct schem_part {
     /* MBR: Partition boot indicator */
     pu8 boot_ind;
 };
-
-/* Unified scheme structure */
-struct schem {
-    /* Scheme type */
-    enum schem_type type;
-
-    /* Disk identifier: integer (MBR) or GUID (GPT) */
-    union {
-        pu32 i;
-        struct guid guid;
-    } id;
-
-    /* First usable LBA */
-    plba first_usable_lba;
-
-    /* Last usable LBA */
-    plba last_usable_lba;
-
-    /* Total partition count (with unsued partitions) */
-    pu32 part_cnt;
-
-    /* Partition table */
-    struct schem_part *table;
-};
-
-pflag schem_is_part_used(const struct schem_part *part);
 
 void schem_init(struct schem *schem);
 

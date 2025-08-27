@@ -789,11 +789,14 @@ static void gpt_from_schem(const struct schem *schem, struct gpt *gpt,
     /* Restore GPT secondary header and table */
     gpt_restore(gpt, table_lba_sec, 0);
 
+    /* Init protective MBR */
+    mbr_init_protective(&gpt->mbr_prot, img_ctx);
+
     /* Convert partitions */
     for(i = 0; i < schem->part_cnt; i++) {
         part = &schem->table[i];
 
-        if(!schem_is_part_used(part)) {
+        if(!schem_part_is_used_gpt(part)) {
             continue;
         }
 
@@ -861,6 +864,17 @@ void schem_init_gpt(struct schem *schem, const struct img_ctx *img_ctx)
     schem->last_usable_lba = table_lba_sec - 1;
     schem->part_cnt = gpt_max_part_cnt;
     guid_create(&schem->id.guid);
+}
+
+void schem_part_init_gpt(struct schem_part *part)
+{
+    guid_create(&part->unique_guid);
+    part->type.guid = gpt_part_type_def;
+}
+
+pflag schem_part_is_used_gpt(const struct schem_part *part)
+{
+    return !guid_is_zero(&part->type.guid);
 }
 
 enum schem_load_res

@@ -141,7 +141,7 @@ static void mbr_from_schem(const struct schem *schem, struct mbr *mbr,
     for(i = 0; i < schem->part_cnt; i++) {
         part = &schem->table[i];
 
-        if(!schem_is_part_used(part)) {
+        if(!schem_part_is_used_mbr(part)) {
             continue;
         }
 
@@ -188,6 +188,16 @@ void schem_init_mbr(struct schem *schem, const struct img_ctx *img_ctx)
 {
     mbr_init_schem(schem, img_ctx);
     schem->id.i = rand_32();
+}
+
+void schem_part_init_mbr(struct schem_part *part)
+{
+    part->type.i = mbr_part_type_def;
+}
+
+pflag schem_part_is_used_mbr(const struct schem_part *part)
+{
+    return part->type.i != 0;
 }
 
 enum schem_load_res

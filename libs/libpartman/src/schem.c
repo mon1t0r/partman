@@ -23,6 +23,30 @@ static pu32 schem_get_max_part_cnt(enum schem_type type)
     }
 }
 
+static void schem_map_funcs(struct schem_funcs *funcs, enum schem_type type)
+{
+    switch(type) {
+        case schem_type_mbr:
+            funcs->init         = &schem_init_mbr;
+            funcs->part_init    = &schem_part_init_mbr;
+            funcs->part_is_used = &schem_part_is_used_mbr;
+            funcs->load         = &schem_load_mbr;
+            funcs->save         = &schem_save_mbr;
+            break;
+
+        case schem_type_gpt:
+            funcs->init         = &schem_init_gpt;
+            funcs->part_init    = &schem_part_init_gpt;
+            funcs->part_is_used = &schem_part_is_used_gpt;
+            funcs->load         = &schem_load_gpt;
+            funcs->save         = &schem_save_gpt;
+            break;
+
+        case schem_type_none:
+            break;
+    }
+}
+
 void schem_init(struct schem *schem)
 {
     memset(schem, 0, sizeof(*schem));
@@ -32,25 +56,25 @@ void schem_init(struct schem *schem)
 pres schem_change_type(struct schem *schem, const struct img_ctx *img_ctx,
                        enum schem_type type)
 {
+    /* Free previous table */
     if(schem->type != schem_type_none) {
         free(schem->table);
     }
 
     memset(schem, 0, sizeof(*schem));
 
-    switch(type) {
-        case schem_type_mbr:
-            schem_init_mbr(schem, img_ctx);
-            break;
-
-        case schem_type_gpt:
-            schem_init_gpt(schem, img_ctx);
-            break;
-
-        case schem_type_none:
-            return pres_ok;
+    /* Return if scheme type NONE will be used */
+    if(type == schem_type_none) {
+        return pres_ok;
     }
 
+    /* Map new scheme functions */
+    schem_map_funcs(&schem->funcs, type);
+
+    /* Init new scheme */
+    schem->funcs.init(schem, img_ctx);
+
+    /* Allocate new scheme table */
     schem->table = calloc(schem_get_max_part_cnt(type),
                           sizeof(struct schem_part));
 
@@ -59,6 +83,13 @@ pres schem_change_type(struct schem *schem, const struct img_ctx *img_ctx,
 
 pres schem_load(struct schem *schem, const struct img_ctx *img_ctx)
 {
+    /* Load GPT first (as loading MBR first will resul in loading
+     * protective MBR) */
+    static const enum schem_type load_order[] = {
+        schem_type_gpt, schem_type_mbr
+    };
+
+    int i;
     enum schem_load_res res;
 
     plog_dbg("Scheme detection and loading started");
@@ -66,26 +97,27 @@ pres schem_load(struct schem *schem, const struct img_ctx *img_ctx)
     /* Free any previous scheme */
     schem_change_type(schem, img_ctx, schem_type_none);
 
+    /* Allocate maximum possible partition table, as we do not know, which
+     * scmeme will be loaded at this point */
     schem->table = calloc(schem_get_max_part_cnt(schem_type_none),
                           sizeof(struct schem_part));
 
-    /* Load GPT first (as loading MBR first will resul in loading
-     * protective MBR) */
-    res = schem_load_gpt(schem, img_ctx);
-    if(res != schem_load_not_found) {
-        goto exit;
-    }
+    for(i = 0; i < ARRAY_SIZE(load_order); i++) {
+        /* Map loading scheme functions */
+        schem_map_funcs(&schem->funcs, load_order[i]);
 
-    /* Load MBR */
-    res = schem_load_mbr(schem, img_ctx);
-    if(res != schem_load_not_found) {
-        goto exit;
+        res = schem->funcs.load(schem, img_ctx);
+
+        /* Scheme found and loaded or fatal error happened */
+        if(res != schem_load_not_found) {
+            goto found;
+        }
     }
 
     /* No scheme found */
     return pres_ok;
 
-exit:
+found:
     return res == schem_load_ok ? pres_ok : pres_fail;
 }
 
