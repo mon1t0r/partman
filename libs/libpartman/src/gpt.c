@@ -8,7 +8,6 @@
 #include "gpt.h"
 #include "log.h"
 #include "memutils.h"
-#include "mbr.h"
 #include "crc32.h"
 
 #define GPT_SIG "EFI PART"
@@ -99,9 +98,6 @@ struct gpt_hdr {
 
 /* GUID Partition Table (GPT) structure */
 struct gpt {
-    /* In-memory protective MBR structure */
-    struct mbr mbr_prot;
-
     /* In-memory GPT primary header structure */
     struct gpt_hdr hdr_prim;
 
@@ -604,12 +600,6 @@ static pres gpt_save(const struct gpt *gpt, const struct img_ctx *img_ctx)
 {
     pres res;
 
-    /* Save protective MBR */
-    res = mbr_save(&gpt->mbr_prot, img_ctx);
-    if(!res) {
-        return pres_fail;
-    }
-
     /* UEFI specification requires to update secondary GPT first */
     res = gpt_pair_save(&gpt->hdr_sec, gpt->table_sec, img_ctx);
     if(!res) {
@@ -687,7 +677,7 @@ gpt_load(struct gpt *gpt, const struct img_ctx *img_ctx)
         gpt_restore(gpt, gpt_table_lba, 0);
 
         res = schem_load_ok;
-        goto mbr;
+        goto exit;
     }
 
     /* Primary GPT is corrupted, secondary GPT is ok */
@@ -702,41 +692,19 @@ gpt_load(struct gpt *gpt, const struct img_ctx *img_ctx)
         gpt_restore(gpt, gpt_table_lba, 1);
 
         res = schem_load_ok;
-        goto mbr;
+        goto exit;
     }
 
     /* Primary GPT is ok, secondary GPT is ok */
 
-mbr:
-    /* Load protective MBR */
-    res = mbr_load(&gpt->mbr_prot, img_ctx);
-    if(res == schem_load_fatal) {
-        plog_err("Error while loading protective MBR");
-        goto exit;
-    }
-
-    if(res != schem_load_ok || !mbr_is_protective(&gpt->mbr_prot)) {
-        if(res == schem_load_not_found) {
-            plog_info("Protective MBR not found and will be created on the "
-                      "next write");
-        } else {
-            plog_info("MBR is found, but is not recognized as Protective MBR. "
-                      "MBR will be overwritten on the next write");
-        }
-
-        /* Initialize new protective MBR */
-        mbr_init_protective(&gpt->mbr_prot, img_ctx);
-    } else {
-        plog_dbg("Protective MBR detected and loaded");
-    }
-
     res = schem_load_ok;
-    plog_dbg("GPT loaded");
 
 exit:
     if(res != schem_load_ok) {
         free(gpt->table_prim);
         free(gpt->table_sec);
+    } else {
+        plog_dbg("GPT loaded");
     }
 
     return res;
@@ -821,9 +789,6 @@ static void gpt_from_schem(const struct schem *schem, struct gpt *gpt,
 
     /* Restore GPT secondary header and table */
     gpt_restore(gpt, table_lba_sec, 0);
-
-    /* Init protective MBR */
-    mbr_init_protective(&gpt->mbr_prot, img_ctx);
 }
 
 static void gpt_to_schem(struct schem *schem, const struct gpt *gpt)

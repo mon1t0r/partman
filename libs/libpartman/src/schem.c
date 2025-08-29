@@ -7,19 +7,22 @@
 #include "mbr.h"
 #include "gpt.h"
 
+static void schem_free(struct schem *schem)
+{
+    free(schem->table);
+}
+
 static pu32 schem_get_max_part_cnt(enum schem_type type)
 {
     switch(type) {
         case schem_type_mbr:
-            return PARTMAN_SCHEM_MAX_PART_CNT_MBR;
+            return mbr_max_part_cnt;
 
         case schem_type_gpt:
             return gpt_max_part_cnt;
 
-        case schem_type_none:
-            /* (!!!) This should return maximum possible partition count for
-             * all schemes */
-            return gpt_max_part_cnt;
+        case schem_cnt:
+            break;
     }
 
     /* This should never happen */
@@ -45,83 +48,215 @@ static void schem_map_funcs(struct schem_funcs *funcs, enum schem_type type)
             funcs->save         = &schem_save_gpt;
             break;
 
-        case schem_type_none:
+        case schem_cnt:
             break;
     }
 }
 
-void schem_init(struct schem *schem)
+static pres schem_new(struct schem *schem, const struct img_ctx *img_ctx,
+                      enum schem_type type, pflag init)
 {
     memset(schem, 0, sizeof(*schem));
-    schem->type = schem_type_none;
-}
-
-pres schem_change_type(struct schem *schem, const struct img_ctx *img_ctx,
-                       enum schem_type type)
-{
-    /* Free previous table */
-    if(schem->type != schem_type_none) {
-        free(schem->table);
-    }
-
-    memset(schem, 0, sizeof(*schem));
-
-    /* Return if scheme type NONE will be used */
-    if(type == schem_type_none) {
-        return pres_ok;
-    }
-
-    /* Map new scheme functions */
-    schem_map_funcs(&schem->funcs, type);
-
-    /* Init new scheme */
-    schem->funcs.init(schem, img_ctx);
 
     /* Allocate new scheme table */
     schem->table = calloc(schem_get_max_part_cnt(type),
                           sizeof(struct schem_part));
 
-    return schem->table != NULL;
+    if(schem->table == NULL) {
+        return pres_fail;
+    }
+
+    /* Map new scheme functions */
+    schem_map_funcs(&schem->funcs, type);
+
+    /* Init new scheme if requested */
+    if(init) {
+        schem->funcs.init(schem, img_ctx);
+    }
+
+    return pres_ok;
 }
 
-pres schem_load(struct schem *schem, const struct img_ctx *img_ctx)
+static pres schem_ctx_schem_alloc(struct schem_ctx *schem_ctx,
+                                  const struct img_ctx *img_ctx,
+                                  enum schem_type type, pflag init)
 {
-    /* Load GPT first (as loading MBR first will resul in loading
-     * protective MBR) */
-    static const enum schem_type load_order[] = {
+    /* Initialize GPT */
+    schem_ctx->schemes[type] = malloc(sizeof(struct schem));
+    if(!schem_ctx->schemes[type]) {
+        return pres_fail;
+    }
+
+    return schem_new(schem_ctx->schemes[type], img_ctx, type, init);
+}
+
+static pres schem_ctx_new_gpt(struct schem_ctx *schem_ctx,
+                              const struct img_ctx *img_ctx)
+{
+    pres res;
+
+    /* Initialize GPT */
+    res = schem_ctx_schem_alloc(schem_ctx, img_ctx, schem_type_gpt, 1);
+    if(!res) {
+        return pres_fail;
+    }
+
+    /* Initialize protective MBR */
+    res = schem_ctx_schem_alloc(schem_ctx, img_ctx, schem_type_mbr, 1);
+    if(!res) {
+        return pres_fail;
+    }
+
+    schem_mbr_set_protective(schem_ctx->schemes[schem_type_mbr], img_ctx);
+
+    return pres_ok;
+}
+
+void schem_ctx_init(struct schem_ctx *schem_ctx)
+{
+    memset(schem_ctx, 0, sizeof(*schem_ctx));
+}
+
+pres schem_ctx_new(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
+                   enum schem_type type)
+{
+    /* Reset context and any previous schemes */
+    schem_ctx_reset(schem_ctx);
+
+    switch(type) {
+        case schem_type_gpt:
+            return schem_ctx_new_gpt(schem_ctx, img_ctx);
+
+        case schem_cnt:
+            break;
+
+        default:
+            return schem_ctx_schem_alloc(schem_ctx, img_ctx, type, 1);
+    }
+
+    return pres_fail;
+}
+
+pres schem_ctx_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
+{
+    int i;
+    struct schem schem;
+    pres res_new;
+    enum schem_load_res res_load;
+
+    plog_dbg("Scheme detection and loading started");
+
+    /* Reset context and any previous schemes */
+    schem_ctx_reset(schem_ctx);
+
+    for(i = 0; i < schem_cnt; i++) {
+        /* Create new scheme, do not initialize */
+        res_new = schem_new(&schem, img_ctx, i, 0);
+        if(!res_new) {
+            return pres_fail;
+        }
+
+        /* Try loading new scheme */
+        res_load = schem.funcs.load(&schem, img_ctx);
+
+        if(res_load == schem_load_fatal) {
+            return pres_fail;
+        }
+
+        if(res_load == schem_load_not_found) {
+            schem_free(&schem);
+            continue;
+        }
+
+        /* Allocate new entry and copy scheme */
+        schem_ctx->schemes[i] = malloc(sizeof(struct schem));
+        if(!schem_ctx->schemes[i]) {
+            return pres_fail;
+        }
+
+        memcpy(schem_ctx->schemes[i], &schem, sizeof(schem));
+    }
+
+    if(!schem_ctx->schemes[schem_type_gpt]) {
+        return pres_ok;
+    }
+
+    /* Extra checks for GPT - Protective MBR */
+
+    if(!schem_ctx->schemes[schem_type_mbr]) {
+        plog_info("Protective MBR not found and will be created on the "
+                  "next write");
+
+        /* Allocate new MBR scheme entry */
+        res_new = schem_ctx_schem_alloc(schem_ctx, img_ctx, schem_type_mbr, 1);
+        if(!res_new) {
+            return pres_fail;
+        }
+
+        schem_mbr_set_protective(schem_ctx->schemes[schem_type_mbr], img_ctx);
+    } else if(!schem_mbr_is_protective(schem_ctx->schemes[schem_type_mbr])) {
+        plog_info("MBR is found, but is not recognized as Protective MBR. "
+                  "MBR will be overwritten on the next write");
+
+        schem_init_mbr(schem_ctx->schemes[schem_type_mbr], img_ctx);
+        schem_mbr_set_protective(schem_ctx->schemes[schem_type_mbr], img_ctx);
+    } else {
+        plog_dbg("Protective MBR detected and loaded");
+    }
+
+    return pres_ok;
+}
+
+pres schem_ctx_save(const struct schem_ctx *schem_ctx,
+                    const struct img_ctx *img_ctx)
+{
+    int i;
+    pres r;
+
+    for(i = 0; i < schem_cnt; i++) {
+        if(!schem_ctx->schemes[i]) {
+            continue;
+        }
+
+        r = schem_ctx->schemes[i]->funcs.save(schem_ctx->schemes[i], img_ctx);
+        if(!r) {
+            return pres_fail;
+        }
+    }
+
+    return pres_ok;
+}
+
+enum schem_type schem_ctx_get_type(const struct schem_ctx *schem_ctx)
+{
+    /* Check for GPT first, so we return GPT instead of protected MBR */
+    static const enum schem_type check_order[] = {
         schem_type_gpt, schem_type_mbr
     };
 
     int i;
-    enum schem_load_res res;
 
-    plog_dbg("Scheme detection and loading started");
-
-    /* Free any previous scheme */
-    schem_change_type(schem, img_ctx, schem_type_none);
-
-    /* Allocate maximum possible partition table, as we do not know, which
-     * scmeme will be loaded at this point */
-    schem->table = calloc(schem_get_max_part_cnt(schem_type_none),
-                          sizeof(struct schem_part));
-
-    for(i = 0; i < ARRAY_SIZE(load_order); i++) {
-        /* Map loading scheme functions */
-        schem_map_funcs(&schem->funcs, load_order[i]);
-
-        res = schem->funcs.load(schem, img_ctx);
-
-        /* Scheme found and loaded or fatal error happened */
-        if(res != schem_load_not_found) {
-            goto found;
+    for(i = 0; i < ARRAY_SIZE(check_order); i++) {
+        if(schem_ctx->schemes[check_order[i]]) {
+            return check_order[i];
         }
     }
 
-    /* No scheme found */
-    return pres_ok;
+    return schem_cnt;
+}
 
-found:
-    return res == schem_load_ok ? pres_ok : pres_fail;
+void schem_ctx_reset(struct schem_ctx *schem_ctx)
+{
+    int i;
+    for(i = 0; i < schem_cnt; i++) {
+        if(!schem_ctx->schemes[i]) {
+            continue;
+        }
+
+        schem_free(schem_ctx->schemes[i]);
+        free(schem_ctx->schemes[i]);
+        schem_ctx->schemes[i] = NULL;
+    }
 }
 
 void schem_part_delete(struct schem_part *part)

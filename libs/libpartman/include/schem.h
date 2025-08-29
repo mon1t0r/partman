@@ -6,7 +6,10 @@
 
 /* Partitioning scheme type */
 enum schem_type {
-    schem_type_none, schem_type_mbr, schem_type_gpt
+    schem_type_mbr,
+    schem_type_gpt,
+
+    schem_cnt
 };
 
 /* Partitioning scheme load result */
@@ -104,12 +107,26 @@ struct schem_part {
     pu8 boot_ind;
 };
 
-void schem_init(struct schem *schem);
+/* Scheme context structure */
+struct schem_ctx {
+    /* Array of pointers to all possible schemes */
+    struct schem *schemes[schem_cnt];
+};
 
-pres schem_change_type(struct schem *schem, const struct img_ctx *img_ctx,
-                       enum schem_type type);
+void schem_ctx_init(struct schem_ctx *schem_ctx);
 
-pres schem_load(struct schem *schem, const struct img_ctx *img_ctx);
+pres schem_ctx_new(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
+                   enum schem_type type);
+
+pres
+schem_ctx_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx);
+
+pres schem_ctx_save(const struct schem_ctx *schem_ctx,
+                    const struct img_ctx *img_ctx);
+
+enum schem_type schem_ctx_get_type(const struct schem_ctx *schem_ctx);
+
+void schem_ctx_reset(struct schem_ctx *schem_ctx);
 
 void schem_part_delete(struct schem_part *part);
 
