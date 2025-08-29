@@ -871,7 +871,6 @@ schem_load_gpt(struct schem *schem, const struct img_ctx *img_ctx)
 
     gpt_free(&gpt);
 
-    plog_dbg("GPT is detected and loaded");
     return schem_load_ok;
 }
 

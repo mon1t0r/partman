@@ -59,7 +59,7 @@ static void pm_print_mbr(const struct schem *schem, const struct img_ctx *img_ct
         pprint("|-Start C/H/S  %03lu/%03lu/%03lu\n", c, h, s);
 
         chs_int_to_tuple(lba_to_chs(img_ctx, part->end_lba), &c, &h, &s);
-        pprint("|-End C/H/S    %03lu/%03lu/%03lu\n\n", c, h, s);
+        pprint("|-End C/H/S    %03lu/%03lu/%03lu\n", c, h, s);
     }
 }
 
@@ -99,7 +99,7 @@ static void pm_print_gpt(const struct schem *schem, const struct img_ctx *img_ct
         pprint("|-Start LBA  %llu\n", part->start_lba);
         pprint("|-End LBA    %llu\n", part->end_lba);
         pprint("|-Sectors    %llu\n", part_sz);
-        pprint("|-Size       %llu bytes\n\n", lba_to_byte(img_ctx, part_sz));
+        pprint("|-Size       %llu bytes\n", lba_to_byte(img_ctx, part_sz));
 
         /* GPT partition name can be printed here */
     }
@@ -444,7 +444,7 @@ action_handle(struct schem_ctx *schem_ctx, enum schem_type *schem_cur_t,
     return res ? action_continue : action_exit_fatal;
 
 no_schem:
-    pprint("No partitioning scheme is present");
+    pprint("No partitioning scheme is present\n");
     return action_continue;
 }
 

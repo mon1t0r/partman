@@ -308,7 +308,6 @@ schem_load_mbr(struct schem *schem, const struct img_ctx *img_ctx)
 
     mbr_to_schem(schem, &mbr, img_ctx);
 
-    plog_dbg("MBR is detected and loaded");
     return schem_load_ok;
 }
 

@@ -175,6 +175,8 @@ pres schem_ctx_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
         }
 
         memcpy(schem_ctx->schemes[i], &schem, sizeof(schem));
+
+        plog_dbg("Scheme #%d is loaded", i);
     }
 
     if(!schem_ctx->schemes[schem_type_gpt]) {
@@ -184,8 +186,8 @@ pres schem_ctx_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
     /* Extra checks for GPT - Protective MBR */
 
     if(!schem_ctx->schemes[schem_type_mbr]) {
-        plog_info("Protective MBR not found and will be created on the "
-                  "next write");
+        plog_info("Protective MBR not found. A new Protective MBR loaded"
+                  "instead");
 
         /* Allocate new MBR scheme entry */
         res_new = schem_ctx_schem_alloc(schem_ctx, img_ctx, schem_type_mbr, 1);
@@ -196,7 +198,7 @@ pres schem_ctx_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
         schem_mbr_set_protective(schem_ctx->schemes[schem_type_mbr], img_ctx);
     } else if(!schem_mbr_is_protective(schem_ctx->schemes[schem_type_mbr])) {
         plog_info("MBR is found, but is not recognized as Protective MBR. "
-                  "MBR will be overwritten on the next write");
+                  "A new Protective MBR loaded instead");
 
         schem_init_mbr(schem_ctx->schemes[schem_type_mbr], img_ctx);
         schem_mbr_set_protective(schem_ctx->schemes[schem_type_mbr], img_ctx);
