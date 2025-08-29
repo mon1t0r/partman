@@ -308,3 +308,8 @@ void mbr_init_protective(struct mbr *mbr, const struct img_ctx *img_ctx)
     part->end_chs = lba_to_chs(img_ctx, part->start_lba + part->sz_lba - 1);
 }
 
+pflag mbr_is_protective(const struct mbr *mbr)
+{
+    return mbr->partitions[0].type == mbr_part_type_prot;
+}
+

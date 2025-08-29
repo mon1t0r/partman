@@ -542,6 +542,14 @@ gpt_pair_load(struct gpt_hdr *hdr, struct gpt_part_ent table[],
         goto exit;
     }
 
+    if(hdr->part_table_entry_cnt > gpt_max_part_cnt) {
+        plog_err("GPT table partition count (%lu) is greater, than "
+                 "maximum supported (%lu)", hdr->part_table_entry_cnt,
+                 gpt_max_part_cnt);
+        load_res = gpt_pair_load_fatal;
+        goto exit;
+    }
+
     /* Get GPT table LBA and size */
     table_lba = hdr->part_table_lba;
     table_sz_secs = byte_to_lba(img_ctx, hdr->part_table_entry_cnt *
@@ -707,9 +715,14 @@ mbr:
         goto exit;
     }
 
-    if(res != schem_load_ok) {
-        plog_info("Protective MBR not found and will be created on the "
-                  "next write");
+    if(res != schem_load_ok || !mbr_is_protective(&gpt->mbr_prot)) {
+        if(res == schem_load_not_found) {
+            plog_info("Protective MBR not found and will be created on the "
+                      "next write");
+        } else {
+            plog_info("MBR is found, but is not recognized as Protective MBR. "
+                      "MBR will be overwritten on the next write");
+        }
 
         /* Initialize new protective MBR */
         mbr_init_protective(&gpt->mbr_prot, img_ctx);
@@ -778,19 +791,8 @@ static void gpt_from_schem(const struct schem *schem, struct gpt *gpt,
 
     memcpy(&gpt->hdr_prim.disk_guid, &schem->id.guid, sizeof(struct guid));
 
-    /* Compute GPT table CRC */
-    gpt->hdr_prim.part_table_crc32 =
-        gpt_table_crc_create(gpt->table_prim,
-                             gpt->hdr_prim.part_table_entry_cnt);
-
     /* Compute GPT header CRC */
     gpt->hdr_prim.hdr_crc32 = gpt_hdr_crc_create(&gpt->hdr_prim);
-
-    /* Restore GPT secondary header and table */
-    gpt_restore(gpt, table_lba_sec, 0);
-
-    /* Init protective MBR */
-    mbr_init_protective(&gpt->mbr_prot, img_ctx);
 
     /* Convert partitions */
     for(i = 0; i < schem->part_cnt; i++) {
@@ -811,6 +813,17 @@ static void gpt_from_schem(const struct schem *schem, struct gpt *gpt,
         part_gpt->attr = part->attr;
         memcpy(&part_gpt->name, &part->name, sizeof(part_gpt->name));
     }
+
+    /* Compute GPT table CRC */
+    gpt->hdr_prim.part_table_crc32 =
+        gpt_table_crc_create(gpt->table_prim,
+                             gpt->hdr_prim.part_table_entry_cnt);
+
+    /* Restore GPT secondary header and table */
+    gpt_restore(gpt, table_lba_sec, 0);
+
+    /* Init protective MBR */
+    mbr_init_protective(&gpt->mbr_prot, img_ctx);
 }
 
 static void gpt_to_schem(struct schem *schem, const struct gpt *gpt)
@@ -869,7 +882,7 @@ void schem_init_gpt(struct schem *schem, const struct img_ctx *img_ctx)
 void schem_part_init_gpt(struct schem_part *part)
 {
     guid_create(&part->unique_guid);
-    part->type.guid = gpt_part_type_def;
+    memcpy(&part->type.guid, &gpt_part_type_def, sizeof(gpt_part_type_def));
 }
 
 pflag schem_part_is_used_gpt(const struct schem_part *part)

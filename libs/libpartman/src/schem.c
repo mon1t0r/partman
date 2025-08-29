@@ -21,6 +21,9 @@ static pu32 schem_get_max_part_cnt(enum schem_type type)
              * all schemes */
             return gpt_max_part_cnt;
     }
+
+    /* This should never happen */
+    return 0;
 }
 
 static void schem_map_funcs(struct schem_funcs *funcs, enum schem_type type)
@@ -121,45 +124,48 @@ found:
     return res == schem_load_ok ? pres_ok : pres_fail;
 }
 
-/* TODO: FIX */
+void schem_part_delete(struct schem_part *part)
+{
+    memset(part, 0, sizeof(*part));
+}
 
-p32 schem_find_overlap(const struct schem_ctx *schem_ctx, pu32 part_cnt,
+p32 schem_find_overlap(const struct schem *schem,
                        const struct schem_part *part, p32 part_ign)
 {
     pu32 i;
-    struct schem_part part_cmp;
+    const struct schem_part *part_cmp;
 
-    for(i = 0; i < part_cnt; i++) {
+    for(i = 0; i < schem->part_cnt; i++) {
         if(i == part_ign) {
             continue;
         }
 
-        if(!schem_ctx->funcs.part_is_used(&schem_ctx->s, i)) {
+        part_cmp = &schem->table[i];
+
+        if(!schem->funcs.part_is_used(part_cmp)) {
             continue;
         }
 
-        schem_ctx->funcs.part_get(&schem_ctx->s, i, &part_cmp);
-
         /* Start LBA is inside of the partition */
         if(
-            part->start_lba >= part_cmp.start_lba &&
-            part->start_lba <= part_cmp.end_lba
+            part->start_lba >= part_cmp->start_lba &&
+            part->start_lba <= part_cmp->end_lba
         ) {
             return i;
         }
 
         /* End LBA is inside of the partition */
         if(
-            part->end_lba >= part_cmp.start_lba &&
-            part->end_lba <= part_cmp.end_lba
+            part->end_lba >= part_cmp->start_lba &&
+            part->end_lba <= part_cmp->end_lba
         ) {
             return i;
         }
 
         /* Partition is inside of the boundaries */
         if(
-            part->start_lba < part_cmp.start_lba &&
-            part->end_lba > part_cmp.end_lba
+            part->start_lba < part_cmp->start_lba &&
+            part->end_lba > part_cmp->end_lba
         ) {
             return i;
         }
@@ -169,13 +175,12 @@ p32 schem_find_overlap(const struct schem_ctx *schem_ctx, pu32 part_cnt,
     return -1;
 }
 
-p32 schem_find_part_index(const struct schem_ctx *schem_ctx, pu32 part_cnt,
-                          pflag part_used)
+p32 schem_find_part_index(const struct schem *schem, pflag part_used)
 {
     pu32 i;
 
-    for(i = 0; i < part_cnt; i++) {
-        if(schem_ctx->funcs.part_is_used(&schem_ctx->s, i) == part_used) {
+    for(i = 0; i < schem->part_cnt; i++) {
+        if(schem->funcs.part_is_used(&schem->table[i]) == part_used) {
             return i;
         }
     }
@@ -183,21 +188,20 @@ p32 schem_find_part_index(const struct schem_ctx *schem_ctx, pu32 part_cnt,
     return -1;
 }
 
-plba_res schem_find_start_sector(const struct schem_ctx *schem_ctx,
-                                 const struct img_ctx *img_ctx,
-                                 const struct schem_info *info, p32 part_ign)
+plba_res schem_find_start_sector(const struct schem *schem,
+                                 const struct img_ctx *img_ctx, p32 part_ign)
 {
     plba lba;
     plba lba_no_align;
     pu32 i;
-    struct schem_part part;
+    const struct schem_part *part;
     pflag pos_changed;
 
-    lba_no_align = info->first_usable_lba;
+    lba_no_align = schem->first_usable_lba;
     lba = lba_align(img_ctx, lba_no_align, 1);
 
     /* If aligned LBA is after the end of usable space */
-    if(lba > info->last_usable_lba) {
+    if(lba > schem->last_usable_lba) {
         lba = lba_no_align;
         lba_no_align = 0;
     }
@@ -205,18 +209,18 @@ plba_res schem_find_start_sector(const struct schem_ctx *schem_ctx,
     do {
         pos_changed = 0;
 
-        for(i = 0; i < info->part_cnt; i++) {
+        for(i = 0; i < schem->part_cnt; i++) {
             if(i == part_ign) {
                 continue;
             }
 
-            if(!schem_ctx->funcs.part_is_used(&schem_ctx->s, i)) {
+            part = &schem->table[i];
+
+            if(!schem->funcs.part_is_used(part)) {
                 continue;
             }
 
-            schem_ctx->funcs.part_get(&schem_ctx->s, i, &part);
-
-            if(lba < part.start_lba || lba > part.end_lba) {
+            if(lba < part->start_lba || lba > part->end_lba) {
                 continue;
             }
 
@@ -232,10 +236,10 @@ plba_res schem_find_start_sector(const struct schem_ctx *schem_ctx,
             }
 
             /* Set no align LBA in case aligned LBA will intersect */
-            lba_no_align = part.end_lba + 1;
+            lba_no_align = part->end_lba + 1;
 
             /* If we reached the end of the usable space */
-            if(lba_no_align > info->last_usable_lba) {
+            if(lba_no_align > schem->last_usable_lba) {
                 return -1;
             }
 
@@ -243,7 +247,7 @@ plba_res schem_find_start_sector(const struct schem_ctx *schem_ctx,
             lba = lba_align(img_ctx, lba_no_align, 1);
 
             /* If aligned LBA is after the end of usable space */
-            if(lba > info->last_usable_lba) {
+            if(lba > schem->last_usable_lba) {
                 lba = lba_no_align;
                 lba_no_align = 0;
             }
@@ -256,32 +260,32 @@ plba_res schem_find_start_sector(const struct schem_ctx *schem_ctx,
     return lba;
 }
 
-plba_res schem_find_last_sector(const struct schem_ctx *schem_ctx,
-                                const struct img_ctx *img_ctx,
-                                const struct schem_info *info, p32 part_ign,
+plba_res schem_find_last_sector(const struct schem *schem,
+                                const struct img_ctx *img_ctx, p32 part_ign,
                                 plba first_lba)
 {
     plba next_lba_bound;
     pu32 i;
-    struct schem_part part;
+    const struct schem_part *part;
+    struct schem_part part_test;
 
-    next_lba_bound = info->last_usable_lba;
+    next_lba_bound = schem->last_usable_lba;
 
-    for(i = 0; i < info->part_cnt; i++) {
+    for(i = 0; i < schem->part_cnt; i++) {
         if(i == part_ign) {
             continue;
         }
 
-        if(!schem_ctx->funcs.part_is_used(&schem_ctx->s, i)) {
+        part = &schem->table[i];
+
+        if(!schem->funcs.part_is_used(part)) {
             continue;
         }
 
-        schem_ctx->funcs.part_get(&schem_ctx->s, i, &part);
-
         /* If partition is located further than first LBA and LBA bound
          * is less, than partition start */
-        if(part.start_lba > first_lba && part.start_lba < next_lba_bound) {
-            next_lba_bound = part.start_lba - 1;
+        if(part->start_lba > first_lba && part->start_lba < next_lba_bound) {
+            next_lba_bound = part->start_lba - 1;
         }
     }
 
@@ -291,20 +295,20 @@ plba_res schem_find_last_sector(const struct schem_ctx *schem_ctx,
     }
 
     /* Check if LBA can be aligned */
-    part.start_lba = first_lba;
-    part.end_lba = lba_align(img_ctx, next_lba_bound, 0);
+    part_test.start_lba = first_lba;
+    part_test.end_lba = lba_align(img_ctx, next_lba_bound, 0);
 
     /* Minus 1 sector to get the end LBA of the previous alignment segment */
-    if(part.end_lba > 0) {
-        part.end_lba--;
+    if(part_test.end_lba > 0) {
+        part_test.end_lba--;
     }
 
     if(
-        part.end_lba >= info->first_usable_lba &&
-        schem_find_overlap(schem_ctx, info->part_cnt, &part, part_ign) == -1
+        part_test.end_lba >= schem->first_usable_lba &&
+        schem_find_overlap(schem, &part_test, part_ign) == -1
     ) {
         /* Return aligned LBA */
-        return part.end_lba;
+        return part_test.end_lba;
     }
 
     /* Return non-aligned LBA */

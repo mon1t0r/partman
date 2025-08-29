@@ -55,5 +55,7 @@ enum schem_load_res mbr_load(struct mbr *mbr, const struct img_ctx *img_ctx);
 
 void mbr_init_protective(struct mbr *mbr, const struct img_ctx *img_ctx);
 
+pflag mbr_is_protective(const struct mbr *mbr);
+
 #endif
 
