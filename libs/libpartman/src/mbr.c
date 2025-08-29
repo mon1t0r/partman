@@ -123,7 +123,11 @@ static void mbr_init_schem(struct schem *schem, const struct img_ctx *img_ctx)
 {
     schem->type = schem_type_mbr;
     schem->first_usable_lba = byte_to_lba(img_ctx, mbr_sz, 1);
-    schem->last_usable_lba = byte_to_lba(img_ctx, img_ctx->img_sz, 0);
+    schem->last_usable_lba = byte_to_lba(img_ctx, img_ctx->img_sz, 0) - 1;
+    /* Limit last usable LBA, due to MBR using plba_mbr type for storing LBA */
+    if(schem->last_usable_lba > 0xFFFFFFFF) {
+        schem->last_usable_lba = 0xFFFFFFFF;
+    }
     schem->part_cnt = PARTMAN_SCHEM_MAX_PART_CNT_MBR;
 }
 
