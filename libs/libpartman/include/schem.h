@@ -113,8 +113,8 @@ pres schem_load(struct schem *schem, const struct img_ctx *img_ctx);
 
 void schem_part_delete(struct schem_part *part);
 
-p32 schem_find_overlap(const struct schem *schem,
-                       const struct schem_part *part, p32 part_ign);
+p32 schem_find_overlap(const struct schem *schem, plba start_lba, plba end_lba,
+                       p32 part_ign);
 
 p32 schem_find_part_index(const struct schem *schem, pflag part_used);
 

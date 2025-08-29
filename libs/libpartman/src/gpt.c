@@ -881,6 +881,7 @@ void schem_init_gpt(struct schem *schem, const struct img_ctx *img_ctx)
 
 void schem_part_init_gpt(struct schem_part *part)
 {
+    memset(part, 0, sizeof(*part));
     guid_create(&part->unique_guid);
     memcpy(&part->type.guid, &gpt_part_type_def, sizeof(gpt_part_type_def));
 }

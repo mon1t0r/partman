@@ -129,44 +129,35 @@ void schem_part_delete(struct schem_part *part)
     memset(part, 0, sizeof(*part));
 }
 
-p32 schem_find_overlap(const struct schem *schem,
-                       const struct schem_part *part, p32 part_ign)
+p32 schem_find_overlap(const struct schem *schem, plba start_lba, plba end_lba,
+                       p32 part_ign)
 {
     pu32 i;
-    const struct schem_part *part_cmp;
+    const struct schem_part *part;
 
     for(i = 0; i < schem->part_cnt; i++) {
         if(i == part_ign) {
             continue;
         }
 
-        part_cmp = &schem->table[i];
+        part = &schem->table[i];
 
-        if(!schem->funcs.part_is_used(part_cmp)) {
+        if(!schem->funcs.part_is_used(part)) {
             continue;
         }
 
         /* Start LBA is inside of the partition */
-        if(
-            part->start_lba >= part_cmp->start_lba &&
-            part->start_lba <= part_cmp->end_lba
-        ) {
+        if(start_lba >= part->start_lba && start_lba <= part->end_lba) {
             return i;
         }
 
         /* End LBA is inside of the partition */
-        if(
-            part->end_lba >= part_cmp->start_lba &&
-            part->end_lba <= part_cmp->end_lba
-        ) {
+        if(end_lba >= part->start_lba && end_lba <= part->end_lba) {
             return i;
         }
 
         /* Partition is inside of the boundaries */
-        if(
-            part->start_lba < part_cmp->start_lba &&
-            part->end_lba > part_cmp->end_lba
-        ) {
+        if(start_lba < part->start_lba && end_lba > part->end_lba) {
             return i;
         }
     }
@@ -267,7 +258,7 @@ plba_res schem_find_last_sector(const struct schem *schem,
     plba next_lba_bound;
     pu32 i;
     const struct schem_part *part;
-    struct schem_part part_test;
+    plba test_end_lba;
 
     next_lba_bound = schem->last_usable_lba;
 
@@ -295,20 +286,19 @@ plba_res schem_find_last_sector(const struct schem *schem,
     }
 
     /* Check if LBA can be aligned */
-    part_test.start_lba = first_lba;
-    part_test.end_lba = lba_align(img_ctx, next_lba_bound, 0);
+    test_end_lba = lba_align(img_ctx, next_lba_bound, 0);
 
     /* Minus 1 sector to get the end LBA of the previous alignment segment */
-    if(part_test.end_lba > 0) {
-        part_test.end_lba--;
+    if(test_end_lba > 0) {
+        test_end_lba--;
     }
 
     if(
-        part_test.end_lba >= schem->first_usable_lba &&
-        schem_find_overlap(schem, &part_test, part_ign) == -1
+        test_end_lba >= first_lba &&
+        schem_find_overlap(schem, first_lba, test_end_lba, part_ign) == -1
     ) {
         /* Return aligned LBA */
-        return part_test.end_lba;
+        return test_end_lba;
     }
 
     /* Return non-aligned LBA */

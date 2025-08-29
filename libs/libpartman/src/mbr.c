@@ -192,6 +192,7 @@ void schem_init_mbr(struct schem *schem, const struct img_ctx *img_ctx)
 
 void schem_part_init_mbr(struct schem_part *part)
 {
+    memset(part, 0, sizeof(*part));
     part->type.i = mbr_part_type_def;
 }
 

@@ -26,10 +26,12 @@ static void pm_print_mbr(const struct schem *schem, const struct img_ctx *img_ct
     const struct schem_part *part;
     int i;
     plba part_sz;
+    pflag part_boot;
     pu32 c, h, s;
 
-    pprint("Partitioning scheme: MBR\n");
-    pprint("Disk identifier: 0x%08lx\n\n", schem->id.i);
+    pprint("Partitioning scheme      MBR\n");
+    pprint("Disk identifier          0x%08lx\n", schem->id.i);
+    pprint("Table size (partitions)  %lu\n\n", schem->part_cnt);
 
     pprint("=== Partitions ===\n");
 
@@ -42,9 +44,11 @@ static void pm_print_mbr(const struct schem *schem, const struct img_ctx *img_ct
         }
 
         part_sz = part->end_lba - part->start_lba + 1;
+        part_boot = part->boot_ind & 0x80;
 
         pprint("Partition #%d\n", i + 1);
-        pprint("|-Boot         %u\n", part->boot_ind);
+        pprint("|-Boot         0x%02x (%s)\n", part->boot_ind,
+               part_boot ? "Yes" : "No");
         pprint("|-Type         0x%02x\n", part->type.i);
         pprint("|-Start LBA    %llu\n", part->start_lba);
         pprint("|-End LBA      %llu\n", part->end_lba);
@@ -66,10 +70,11 @@ static void pm_print_gpt(const struct schem *schem, const struct img_ctx *img_ct
     int i;
     plba part_sz;
 
-    pprint("Partitioning scheme: GPT\n");
+    pprint("Partitioning scheme      GPT\n");
 
     guid_to_str(buf, &schem->id.guid);
-    pprint("Disk identifier: %s\n\n", buf);
+    pprint("Disk identifier          %s\n", buf);
+    pprint("Table size (partitions)  %lu\n\n", schem->part_cnt);
 
     pprint("=== Partitions === \n");
 
@@ -86,15 +91,15 @@ static void pm_print_gpt(const struct schem *schem, const struct img_ctx *img_ct
         pprint("Partition #%d\n", i + 1);
 
         guid_to_str(buf, &part->unique_guid);
-        pprint("|-Id          %s\n", buf);
+        pprint("|-Id         %s\n", buf);
 
         guid_to_str(buf, &part->type.guid);
-        pprint("|-Type        %s\n", buf);
+        pprint("|-Type       %s\n", buf);
 
-        pprint("|-Start LBA   %llu\n", part->start_lba);
-        pprint("|-End LBA     %llu\n", part->end_lba);
-        pprint("|-Sectors     %llu\n", part_sz);
-        pprint("|-Size        %llu bytes\n", lba_to_byte(img_ctx, part_sz));
+        pprint("|-Start LBA  %llu\n", part->start_lba);
+        pprint("|-End LBA    %llu\n", part->end_lba);
+        pprint("|-Sectors    %llu\n", part_sz);
+        pprint("|-Size       %llu bytes\n\n", lba_to_byte(img_ctx, part_sz));
 
         /* GPT partition name can be printed here */
     }
@@ -104,8 +109,8 @@ static void pm_print_common(const struct img_ctx *img_ctx)
 {
     pprint("Image '%s': %llu bytes, %llu sectors\n", img_ctx->img_name,
            img_ctx->img_sz, byte_to_lba(img_ctx, img_ctx->img_sz, 0));
-    pprint("Units: sectors\n");
-    pprint("Sector size: %lu bytes\n", img_ctx->sec_sz);
+    pprint("Units                    sectors\n");
+    pprint("Sector size              %lu bytes\n", img_ctx->sec_sz);
 }
 
 static void
@@ -123,7 +128,7 @@ pm_print_scheme(const struct schem *schem, const struct img_ctx *img_ctx)
             break;
 
         case schem_type_none:
-            pprint("Partitioning scheme: None\n");
+            pprint("Partitioning scheme      None\n");
             break;
     }
 }
@@ -207,6 +212,7 @@ static void
 pm_part_toggle_boot(struct schem *schem, const struct img_ctx *img_ctx)
 {
     p32 part_index;
+    struct schem_part *part;
 
     if(schem->type != schem_type_mbr) {
         pprint("Partitioning scheme is not MBR\n");
@@ -219,7 +225,9 @@ pm_part_toggle_boot(struct schem *schem, const struct img_ctx *img_ctx)
         return;
     }
 
-    schem->table[part_index].boot_ind = !schem->table[part_index].boot_ind;
+    part = &schem->table[part_index];
+
+    part->boot_ind = (~part->boot_ind) & 0x80;
 }
 
 static void pm_part_change_type_mbr(struct schem *schem, pu32 part_index)
@@ -303,11 +311,12 @@ static void
 pm_part_alter(struct schem *schem, const struct img_ctx *img_ctx, pflag is_new)
 {
     pres check_res;
-    pu32 part_index;
     enum scan_res scan_res;
-    struct schem_part part;
-    plba_res lba_def;
     p32 part_index_res;
+    pu32 part_index;
+    plba_res def_lba;
+    plba start_lba;
+    plba end_lba;
 
     /* Check if scheme is available for editing */
     check_res = pm_check_available(schem);
@@ -322,48 +331,48 @@ pm_part_alter(struct schem *schem, const struct img_ctx *img_ctx, pflag is_new)
     }
 
     /* Find start sector - ignore current partition */
-    lba_def = schem_find_start_sector(schem, img_ctx, part_index);
-    if(lba_def == -1) {
+    def_lba = schem_find_start_sector(schem, img_ctx, part_index);
+    if(def_lba == -1) {
         pprint("Unable to find free start sector\n");
         return;
     }
 
     /* Get user input */
     scan_res = prompt_range_pu64("First sector", schem->first_usable_lba,
-                                 schem->last_usable_lba, lba_def,
-                                 &part.start_lba);
+                                 schem->last_usable_lba, def_lba, &start_lba);
     if(scan_res != scan_ok) {
         return;
     }
 
     /* Find last sector - ignore current partition */
-    lba_def = schem_find_last_sector(schem, img_ctx, part_index,
-                                     part.start_lba);
-    if(lba_def == -1) {
+    def_lba = schem_find_last_sector(schem, img_ctx, part_index, start_lba);
+    if(def_lba == -1) {
         pprint("Unable to find available last sector\n");
         return;
     }
 
     /* Get user input */
-    scan_res = prompt_sector_ext("Last sector", part.start_lba,
-                                 schem->last_usable_lba, lba_def,
-                                 img_ctx->sec_sz, &part.end_lba);
+    scan_res = prompt_sector_ext("Last sector", start_lba,
+                                 schem->last_usable_lba, def_lba,
+                                 img_ctx->sec_sz, &end_lba);
     if(scan_res != scan_ok) {
         return;
     }
 
     /* Check if current partition overlaps with any other */
-    part_index_res = schem_find_overlap(schem, &part, part_index);
+    part_index_res = schem_find_overlap(schem, start_lba, end_lba, part_index);
     if(part_index_res >= 0) {
         pprint("Overlap detected with partition #%ld\n", part_index_res + 1);
         return;
     }
 
+    /* Initialize partition, if creating new */
     if(is_new) {
         schem->funcs.part_init(&schem->table[part_index]);
     }
 
-    memcpy(&schem->table[part_index], &part, sizeof(part));
+    schem->table[part_index].start_lba = start_lba;
+    schem->table[part_index].end_lba = end_lba;
 }
 
 static enum action_res
