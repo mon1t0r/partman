@@ -1,4 +1,6 @@
+#include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "img_ctx.h"
 #include "log.h"
@@ -46,6 +48,20 @@ pres img_ctx_validate(const struct img_ctx *ctx)
     return pres_ok;
 
 }
+
+pres img_ctx_sync(const struct img_ctx *ctx)
+{
+    int res;
+
+    res = fsync(ctx->img_fd);
+    if(res == -1) {
+        perror("fsync()");
+        return pres_fail;
+    }
+
+    return pres_ok;
+}
+
 pu64 lba_to_byte(const struct img_ctx *ctx, plba lba)
 {
     return lba * ctx->sec_sz;

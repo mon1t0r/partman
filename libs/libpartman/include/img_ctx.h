@@ -31,6 +31,8 @@ void img_ctx_init(struct img_ctx *ctx, const char *img_name, int img_fd,
 
 pres img_ctx_validate(const struct img_ctx *ctx);
 
+pres img_ctx_sync(const struct img_ctx *ctx);
+
 pu64 lba_to_byte(const struct img_ctx *ctx, plba lba);
 
 plba byte_to_lba(const struct img_ctx *ctx, pu64 bytes, pflag round_up);

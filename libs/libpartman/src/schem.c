@@ -263,7 +263,8 @@ pres schem_ctx_save(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
         schem_ctx->schemes_in_img[i] = 1;
     }
 
-    return pres_ok;
+    /* Sync image file descriptor, to ensure all data is written */
+    return img_ctx_sync(img_ctx);
 }
 
 enum schem_type schem_ctx_get_type(const struct schem_ctx *schem_ctx)
