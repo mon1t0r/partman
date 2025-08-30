@@ -86,6 +86,9 @@ release/partman -b4096 hdd.img
 ```
 
 ## TODO
- - perform testing on different images;
+ - UI - display free sectors;
+ - options - C/H/S configuration, alignment configuration;
+ - code formatting;
+ - perform testing with different image sizes;
  - perform testing on different platforms.
 
