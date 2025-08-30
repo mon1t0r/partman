@@ -187,8 +187,7 @@ pres schem_ctx_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
     /* Extra checks for GPT - Protective MBR */
 
     if(!schem_ctx->schemes[schem_type_mbr]) {
-        plog_info("Protective MBR not found. A new Protective MBR loaded"
-                  "instead");
+        plog_info("Protective MBR not found. A new Protective MBR was loaded");
 
         /* Allocate new MBR scheme entry */
         res_new = schem_ctx_schem_alloc(schem_ctx, img_ctx, schem_type_mbr, 1);

@@ -18,6 +18,39 @@
 
 #define PARTMAN_VER "1.0"
 
+/* Splitted help message (due to possible string length limitations) on
+ * some compilers */
+#define PARTMAN_HELP_1                        \
+    "Help:\n\n"                               \
+    "  MBR\n"                                 \
+    "  |-a  toggle a bootable flag\n"         \
+    "\n"                                      \
+    "  GPT\n"                                 \
+    "  |-M  enter Protective MBR\n"           \
+    "  |-h  reset Protective MBR\n"           \
+    "\n"                                      \
+    "  Generic\n"                             \
+    "  |-p  print the partitioning scheme\n"  \
+    "  |-n  add a new partition\n"            \
+    "  |-e  resize a partition\n"             \
+    "  |-t  change a partition type\n"        \
+    "  |-d  delete a partition\n"             \
+    "\n"                                      \
+
+#define PARTMAN_HELP_2                        \
+    "  Misc\n"                                \
+    "  |-m  print this menu\n"                \
+    "  |-r  return from any nested scheme\n"  \
+    "\n"                                      \
+    "  Save & Exit\n"                         \
+    "  |-w  write scheme to image and exit\n" \
+    "  |-q  quit without saving changes\n"    \
+    "\n"                                      \
+    "  Create a new partitioning scheme\n"    \
+    "  |-g  create a new GPT scheme\n"        \
+    "  |-o  create a new MBR scheme\n"        \
+    "\n"                                      \
+
 enum action_res {
     action_continue, action_exit_ok, action_exit_fatal
 };
@@ -375,7 +408,8 @@ action_handle(struct schem_ctx *schem_ctx, enum schem_type *schem_cur_t,
 
         /* Help */
         case 'm':
-            pprint("*help should be here*\n");
+            pprint(PARTMAN_HELP_1);
+            pprint(PARTMAN_HELP_2);
             break;
 
         /* Print the partition table */
@@ -391,7 +425,7 @@ action_handle(struct schem_ctx *schem_ctx, enum schem_type *schem_cur_t,
             pm_part_alter(schem_cur, img_ctx, 1);
             break;
 
-        /* Create/resize a partition */
+        /* Resize a partition */
         case 'e':
             if(!schem_cur) {
                 goto no_schem;
@@ -443,21 +477,27 @@ action_handle(struct schem_ctx *schem_ctx, enum schem_type *schem_cur_t,
         /* Enter Protective MBR */
         case 'M':
             if(
-                *schem_cur_t == schem_type_gpt &&
-                schem_ctx->schemes[schem_type_mbr]
+                *schem_cur_t != schem_type_gpt ||
+                !schem_ctx->schemes[schem_type_mbr]
             ) {
-                *schem_cur_t = schem_type_mbr;
-            } else {
                 pprint("Unable to switch to Protective MBR\n");
+                break;
             }
+            *schem_cur_t = schem_type_mbr;
             break;
 
         /* Reset Protective MBR */
         case 'h':
-            if(schem_ctx->schemes[schem_type_mbr]) {
-                schem_init_mbr(schem_ctx->schemes[schem_type_mbr], img_ctx);
-                schem_mbr_set_prot(schem_ctx->schemes[schem_type_mbr]);
+            if(!schem_ctx->schemes[schem_type_gpt]) {
+                pprint("Partitioning scheme is not GPT\n");
+                break;
             }
+            if(!schem_ctx->schemes[schem_type_mbr]) {
+                pprint("Unable to reset Protective MBR\n");
+                break;
+            }
+            schem_init_mbr(schem_ctx->schemes[schem_type_mbr], img_ctx);
+            schem_mbr_set_prot(schem_ctx->schemes[schem_type_mbr]);
             break;
 
         /* Exit any nested scheme */
