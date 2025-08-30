@@ -661,7 +661,7 @@ int main(int argc, char *const *argv)
 
 exit:
     /* Free scheme context resources */
-    schem_ctx_reset(&schem_ctx);
+    schem_ctx_reset(&schem_ctx, 0);
     close(img_fd);
 
     return res;
