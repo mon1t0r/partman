@@ -159,6 +159,8 @@ static void mbr_init_schem(struct schem *schem, const struct img_ctx *img_ctx)
         schem->last_usable_lba = 0xFFFFFFFF;
     }
     schem->part_cnt = mbr_max_part_cnt;
+
+    memset(schem->table, 0, sizeof(*schem->table) * schem->part_cnt);
 }
 
 static pres mbr_save(const struct mbr *mbr, const struct img_ctx *img_ctx)
@@ -305,6 +307,8 @@ schem_load_mbr(struct schem *schem, const struct img_ctx *img_ctx)
     struct mbr mbr;
     enum schem_load_res res;
 
+    memset(&mbr, 0, sizeof(mbr));
+
     res = mbr_load(&mbr, img_ctx);
     if(res != schem_load_ok) {
         return res;
@@ -318,6 +322,8 @@ schem_load_mbr(struct schem *schem, const struct img_ctx *img_ctx)
 pres schem_save_mbr(const struct schem *schem, const struct img_ctx *img_ctx)
 {
     struct mbr mbr;
+
+    memset(&mbr, 0, sizeof(mbr));
 
     mbr_from_schem(schem, &mbr, img_ctx);
 

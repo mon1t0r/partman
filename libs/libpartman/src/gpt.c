@@ -611,7 +611,7 @@ static pres gpt_save(const struct gpt *gpt, const struct img_ctx *img_ctx)
         return pres_fail;
     }
 
-    plog_dbg("GPT saved");
+    plog_dbg("Saved GPT");
     return pres_ok;
 }
 
@@ -623,14 +623,6 @@ gpt_load(struct gpt *gpt, const struct img_ctx *img_ctx)
     enum gpt_pair_load_res gpt_res_sec;
     plba gpt_lba_sec;
     plba gpt_table_lba;
-
-    /* Allocate tables */
-    gpt->table_prim = calloc(gpt_max_part_cnt, sizeof(struct gpt_part_ent));
-    gpt->table_sec = calloc(gpt_max_part_cnt, sizeof(struct gpt_part_ent));
-
-    if(gpt->table_prim == NULL || gpt->table_sec == NULL) {
-        return schem_load_fatal;
-    }
 
     /* Load primary GPT, located at LBA 1 */
     gpt_res_prim = gpt_pair_load(&gpt->hdr_prim, gpt->table_prim, img_ctx, 1);
@@ -700,11 +692,8 @@ gpt_load(struct gpt *gpt, const struct img_ctx *img_ctx)
     res = schem_load_ok;
 
 exit:
-    if(res != schem_load_ok) {
-        free(gpt->table_prim);
-        free(gpt->table_sec);
-    } else {
-        plog_dbg("GPT loaded");
+    if(res == schem_load_ok) {
+        plog_dbg("Loaded GPT");
     }
 
     return res;
@@ -759,9 +748,6 @@ static void gpt_from_schem(const struct schem *schem, struct gpt *gpt,
 
     memcpy(&gpt->hdr_prim.disk_guid, &schem->id.guid, sizeof(struct guid));
 
-    /* Compute GPT header CRC */
-    gpt->hdr_prim.hdr_crc32 = gpt_hdr_crc_create(&gpt->hdr_prim);
-
     /* Convert partitions */
     for(i = 0; i < schem->part_cnt; i++) {
         part = &schem->table[i];
@@ -787,6 +773,9 @@ static void gpt_from_schem(const struct schem *schem, struct gpt *gpt,
         gpt_table_crc_create(gpt->table_prim,
                              gpt->hdr_prim.part_table_entry_cnt);
 
+    /* Compute GPT header CRC */
+    gpt->hdr_prim.hdr_crc32 = gpt_hdr_crc_create(&gpt->hdr_prim);
+
     /* Restore GPT secondary header and table */
     gpt_restore(gpt, table_lba_sec, 0);
 }
@@ -803,6 +792,8 @@ static void gpt_to_schem(struct schem *schem, const struct gpt *gpt)
     schem->first_usable_lba = gpt->hdr_prim.first_usable_lba;
     schem->last_usable_lba = gpt->hdr_prim.last_usable_lba;
     schem->part_cnt = gpt->hdr_prim.part_table_entry_cnt;
+
+    memset(schem->table, 0, sizeof(*schem->table) * schem->part_cnt);
 
     /* Convert partitions */
     for(i = 0; i < schem->part_cnt; i++) {
@@ -842,6 +833,8 @@ void schem_init_gpt(struct schem *schem, const struct img_ctx *img_ctx)
     schem->last_usable_lba = table_lba_sec - 1;
     schem->part_cnt = gpt_max_part_cnt;
     guid_create(&schem->id.guid);
+
+    memset(schem->table, 0, sizeof(*schem->table) * schem->part_cnt);
 }
 
 void schem_part_init_gpt(struct schem_part *part)
@@ -862,24 +855,58 @@ schem_load_gpt(struct schem *schem, const struct img_ctx *img_ctx)
     struct gpt gpt;
     enum schem_load_res res;
 
-    res = gpt_load(&gpt, img_ctx);
-    if(res != schem_load_ok) {
-        return res;
+    memset(&gpt, 0, sizeof(gpt));
+
+    /* Allocate tables */
+    gpt.table_prim = calloc(gpt_max_part_cnt, sizeof(struct gpt_part_ent));
+    gpt.table_sec = calloc(gpt_max_part_cnt, sizeof(struct gpt_part_ent));
+
+    if(gpt.table_prim == NULL || gpt.table_sec == NULL) {
+        return schem_load_fatal;
     }
 
+    /* Load GPT */
+    res = gpt_load(&gpt, img_ctx);
+    if(res != schem_load_ok) {
+        goto exit;
+    }
+
+    /* Convert GPT to general scheme */
     gpt_to_schem(schem, &gpt);
 
+    res = schem_load_ok;
+
+exit:
+    /* Free tables */
     gpt_free(&gpt);
 
-    return schem_load_ok;
+    return res;
 }
 
 pres schem_save_gpt(const struct schem *schem, const struct img_ctx *img_ctx)
 {
     struct gpt gpt;
+    pres res;
 
+    memset(&gpt, 0, sizeof(gpt));
+
+    /* Allocate tables */
+    gpt.table_prim = calloc(gpt_max_part_cnt, sizeof(struct gpt_part_ent));
+    gpt.table_sec = calloc(gpt_max_part_cnt, sizeof(struct gpt_part_ent));
+
+    if(gpt.table_prim == NULL || gpt.table_sec == NULL) {
+        return pres_fail;
+    }
+
+    /* Convert general scheme to GPT */
     gpt_from_schem(schem, &gpt, img_ctx);
 
-    return gpt_save(&gpt, img_ctx);
+    /* Save GPT */
+    res = gpt_save(&gpt, img_ctx);
+
+    /* Free tables */
+    gpt_free(&gpt);
+
+    return res;
 }
 
