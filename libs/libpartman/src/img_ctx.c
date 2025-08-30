@@ -61,7 +61,7 @@ plba lba_align(const struct img_ctx *ctx, plba lba, pflag round_up)
     return (lba / ctx->align + (round_up ? 1 : 0)) * ctx->align;
 }
 
-pchs lba_to_chs(const struct img_ctx *ctx, plba lba)
+pchs lba_to_chs(const struct img_ctx *ctx, plba lba, pflag protective_limit)
 {
     plba max_lba;
     pchs c, h, s;
@@ -71,6 +71,13 @@ pchs lba_to_chs(const struct img_ctx *ctx, plba lba)
     max_lba = (0x3FF * ctx->hpc + (ctx->hpc-1)) * ctx->spt + (ctx->spt-1);
 
     if(lba > max_lba) {
+        /* Protective MBR requires tuple (1023, 255, 63) to be used when CHS
+         * is too large */
+        if(protective_limit) {
+            return chs_tuple_to_int(1023, 255, 63);
+        }
+
+        /* Otherwise tuple (1023, 254, 63) will be used */
         lba = max_lba;
     }
 

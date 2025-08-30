@@ -101,13 +101,14 @@ static pres schem_ctx_new_gpt(struct schem_ctx *schem_ctx,
         return pres_fail;
     }
 
-    /* Initialize protective MBR */
+    /* Initialize MBR */
     res = schem_ctx_schem_alloc(schem_ctx, img_ctx, schem_type_mbr, 1);
     if(!res) {
         return pres_fail;
     }
 
-    schem_mbr_set_protective(schem_ctx->schemes[schem_type_mbr], img_ctx);
+    /* Set Protective MBR */
+    schem_mbr_set_prot(schem_ctx->schemes[schem_type_mbr]);
 
     return pres_ok;
 }
@@ -195,13 +196,13 @@ pres schem_ctx_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
             return pres_fail;
         }
 
-        schem_mbr_set_protective(schem_ctx->schemes[schem_type_mbr], img_ctx);
-    } else if(!schem_mbr_is_protective(schem_ctx->schemes[schem_type_mbr])) {
+        schem_mbr_set_prot(schem_ctx->schemes[schem_type_mbr]);
+    } else if(!schem_mbr_is_prot(schem_ctx->schemes[schem_type_mbr])) {
         plog_info("MBR is found, but is not recognized as Protective MBR. "
                   "A new Protective MBR loaded instead");
 
         schem_init_mbr(schem_ctx->schemes[schem_type_mbr], img_ctx);
-        schem_mbr_set_protective(schem_ctx->schemes[schem_type_mbr], img_ctx);
+        schem_mbr_set_prot(schem_ctx->schemes[schem_type_mbr]);
     } else {
         plog_dbg("Protective MBR detected and loaded");
     }

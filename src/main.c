@@ -14,6 +14,7 @@
 #include "scan.h"
 #include "img_ctx.h"
 #include "schem.h"
+#include "mbr.h"
 
 #define PARTMAN_VER "1.0"
 
@@ -26,7 +27,8 @@ static void pm_print_mbr(const struct schem *schem, const struct img_ctx *img_ct
     const struct schem_part *part;
     int i;
     plba part_sz;
-    pflag part_boot;
+    pflag part_is_boot;
+    pflag part_is_prot;
     pu32 c, h, s;
 
     pprint("Partitioning scheme      MBR\n");
@@ -44,22 +46,25 @@ static void pm_print_mbr(const struct schem *schem, const struct img_ctx *img_ct
         }
 
         part_sz = part->end_lba - part->start_lba + 1;
-        part_boot = part->boot_ind & 0x80;
+        part_is_boot = part->boot_ind & 0x80;
+        part_is_prot = schem_mbr_part_is_prot(part);
 
         pprint("Partition #%d\n", i + 1);
         pprint("|-Boot         0x%02x (%s)\n", part->boot_ind,
-               part_boot ? "Yes" : "No");
+               part_is_boot ? "Yes" : "No");
         pprint("|-Type         0x%02x\n", part->type.i);
         pprint("|-Start LBA    %llu\n", part->start_lba);
         pprint("|-End LBA      %llu\n", part->end_lba);
         pprint("|-Sectors      %llu\n", part_sz);
         pprint("|-Size         %llu bytes\n", lba_to_byte(img_ctx, part_sz));
 
-        chs_int_to_tuple(lba_to_chs(img_ctx, part->start_lba), &c, &h, &s);
-        pprint("|-Start C/H/S  %03lu/%03lu/%03lu\n", c, h, s);
+        chs_int_to_tuple(lba_to_chs(img_ctx, part->start_lba, part_is_prot),
+                         &c, &h, &s);
+        pprint("|-Start C/H/S  %lu/%lu/%lu\n", c, h, s);
 
-        chs_int_to_tuple(lba_to_chs(img_ctx, part->end_lba), &c, &h, &s);
-        pprint("|-End C/H/S    %03lu/%03lu/%03lu\n", c, h, s);
+        chs_int_to_tuple(lba_to_chs(img_ctx, part->end_lba, part_is_prot),
+                         &c, &h, &s);
+        pprint("|-End C/H/S    %lu/%lu/%lu\n", c, h, s);
     }
 }
 
@@ -432,6 +437,31 @@ action_handle(struct schem_ctx *schem_ctx, enum schem_type *schem_cur_t,
         /* Create new GPT scheme */
         case 'g':
             res = schem_ctx_new(schem_ctx, img_ctx, schem_type_gpt);
+            *schem_cur_t = schem_ctx_get_type(schem_ctx);
+            break;
+
+        /* Enter Protective MBR */
+        case 'M':
+            if(
+                *schem_cur_t == schem_type_gpt &&
+                schem_ctx->schemes[schem_type_mbr]
+            ) {
+                *schem_cur_t = schem_type_mbr;
+            } else {
+                pprint("Unable to switch to Protective MBR\n");
+            }
+            break;
+
+        /* Reset Protective MBR */
+        case 'h':
+            if(schem_ctx->schemes[schem_type_mbr]) {
+                schem_init_mbr(schem_ctx->schemes[schem_type_mbr], img_ctx);
+                schem_mbr_set_prot(schem_ctx->schemes[schem_type_mbr]);
+            }
+            break;
+
+        /* Exit any nested scheme */
+        case 'r':
             *schem_cur_t = schem_ctx_get_type(schem_ctx);
             break;
 

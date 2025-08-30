@@ -20,10 +20,11 @@ schem_load_mbr(struct schem *schem, const struct img_ctx *img_ctx);
 
 pres schem_save_mbr(const struct schem *schem, const struct img_ctx *img_ctx);
 
-void
-schem_mbr_set_protective(struct schem *schem, const struct img_ctx *img_ctx);
+void schem_mbr_set_prot(struct schem *schem);
 
-pflag schem_mbr_is_protective(struct schem *schem);
+pflag schem_mbr_is_prot(const struct schem *schem);
+
+pflag schem_mbr_part_is_prot(const struct schem_part *part);
 
 #endif
 

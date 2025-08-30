@@ -225,8 +225,9 @@ static void mbr_from_schem(const struct schem *schem, struct mbr *mbr,
                            const struct img_ctx *img_ctx)
 {
     pu32 i;
-    struct mbr_part *part_mbr;
     const struct schem_part *part;
+    struct mbr_part *part_mbr;
+    pflag is_prot;
 
     /* Convert scheme details */
     mbr->disk_sig = schem->id.i;
@@ -241,11 +242,14 @@ static void mbr_from_schem(const struct schem *schem, struct mbr *mbr,
 
         part_mbr = &mbr->partitions[i];
 
+        /* Used for LBA - CHS converting */
+        is_prot = schem_mbr_part_is_prot(part);
+
         part_mbr->type = part->type.i;
         part_mbr->start_lba = part->start_lba;
         part_mbr->sz_lba = part->end_lba - part->start_lba + 1;
-        part_mbr->start_chs = lba_to_chs(img_ctx, part->start_lba);
-        part_mbr->end_chs = lba_to_chs(img_ctx, part->end_lba);
+        part_mbr->start_chs = lba_to_chs(img_ctx, part->start_lba, is_prot);
+        part_mbr->end_chs = lba_to_chs(img_ctx, part->end_lba, is_prot);
         part_mbr->boot_ind = part->boot_ind;
     }
 }
@@ -320,29 +324,27 @@ pres schem_save_mbr(const struct schem *schem, const struct img_ctx *img_ctx)
     return mbr_save(&mbr, img_ctx);
 }
 
-void
-schem_mbr_set_protective(struct schem *schem, const struct img_ctx *img_ctx)
+void schem_mbr_set_prot(struct schem *schem)
 {
     struct schem_part *part;
-    plba img_sz_lba;
-
-    img_sz_lba = byte_to_lba(img_ctx, img_ctx->img_sz, 0);
-    if(img_sz_lba > 0xFFFFFFFF) {
-        img_sz_lba = 0x100000000;
-    }
 
     memset(schem->table, 0, sizeof(*schem->table) * schem->part_cnt);
 
     part = &schem->table[0];
 
-    part->boot_ind = 0x0;
     part->type.i = mbr_part_type_prot;
-    part->start_lba = 1;
-    part->end_lba = img_sz_lba - 1;
+    part->start_lba = schem->first_usable_lba;
+    part->end_lba = schem->last_usable_lba;
+    part->boot_ind = 0x0;
 }
 
-pflag schem_mbr_is_protective(struct schem *schem)
+pflag schem_mbr_is_prot(const struct schem *schem)
 {
-    return schem->table[0].type.i == mbr_part_type_prot;
+    return schem_mbr_part_is_prot(&schem->table[0]);
+}
+
+pflag schem_mbr_part_is_prot(const struct schem_part *part)
+{
+    return part->type.i == mbr_part_type_prot;
 }
 
