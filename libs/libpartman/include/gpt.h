@@ -20,5 +20,7 @@ schem_load_gpt(struct schem *schem, const struct img_ctx *img_ctx);
 
 pres schem_save_gpt(const struct schem *schem, const struct img_ctx *img_ctx);
 
+pres schem_remove_gpt(const struct img_ctx *img_ctx);
+
 #endif
 

@@ -38,6 +38,7 @@ static void schem_map_funcs(struct schem_funcs *funcs, enum schem_type type)
             funcs->part_is_used = &schem_part_is_used_mbr;
             funcs->load         = &schem_load_mbr;
             funcs->save         = &schem_save_mbr;
+            funcs->remove       = &schem_remove_mbr;
             break;
 
         case schem_type_gpt:
@@ -46,6 +47,7 @@ static void schem_map_funcs(struct schem_funcs *funcs, enum schem_type type)
             funcs->part_is_used = &schem_part_is_used_gpt;
             funcs->load         = &schem_load_gpt;
             funcs->save         = &schem_save_gpt;
+            funcs->remove       = &schem_remove_gpt;
             break;
 
         case schem_cnt:
@@ -121,8 +123,8 @@ void schem_ctx_init(struct schem_ctx *schem_ctx)
 pres schem_ctx_new(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
                    enum schem_type type)
 {
-    /* Reset context and any previous schemes */
-    schem_ctx_reset(schem_ctx);
+    /* Reset context and any previous schemes, keep only scheme flags */
+    schem_ctx_reset(schem_ctx, 1);
 
     switch(type) {
         case schem_type_gpt:
@@ -145,10 +147,10 @@ pres schem_ctx_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
     pres res_new;
     enum schem_load_res res_load;
 
-    plog_dbg("Scheme detection and loading started");
+    plog_dbg("Schemes detection and loading started");
 
     /* Reset context and any previous schemes */
-    schem_ctx_reset(schem_ctx);
+    schem_ctx_reset(schem_ctx, 0);
 
     for(i = 0; i < schem_cnt; i++) {
         /* Create new scheme, do not initialize */
@@ -177,6 +179,9 @@ pres schem_ctx_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
 
         memcpy(schem_ctx->schemes[i], &schem, sizeof(schem));
 
+        /* Set scheme in image presence flag */
+        schem_ctx->schemes_in_img[i] = 1;
+
         plog_dbg("Scheme #%d is loaded", i);
     }
 
@@ -187,7 +192,8 @@ pres schem_ctx_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
     /* Extra checks for GPT - Protective MBR */
 
     if(!schem_ctx->schemes[schem_type_mbr]) {
-        plog_info("Protective MBR not found. A new Protective MBR was loaded");
+        plog_info("GPT is present, but Protective MBR was not found. A new "
+                  "Protective MBR was loaded");
 
         /* Allocate new MBR scheme entry */
         res_new = schem_ctx_schem_alloc(schem_ctx, img_ctx, schem_type_mbr, 1);
@@ -197,8 +203,8 @@ pres schem_ctx_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
 
         schem_mbr_set_prot(schem_ctx->schemes[schem_type_mbr]);
     } else if(!schem_mbr_is_prot(schem_ctx->schemes[schem_type_mbr])) {
-        plog_info("MBR is found, but is not recognized as Protective MBR. "
-                  "A new Protective MBR loaded instead");
+        plog_info("MBR was found, but was not recognized as Protective MBR. "
+                  "A new Protective MBR was loaded");
 
         schem_init_mbr(schem_ctx->schemes[schem_type_mbr], img_ctx);
         schem_mbr_set_prot(schem_ctx->schemes[schem_type_mbr]);
@@ -209,21 +215,52 @@ pres schem_ctx_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
     return pres_ok;
 }
 
-pres schem_ctx_save(const struct schem_ctx *schem_ctx,
-                    const struct img_ctx *img_ctx)
+pres schem_ctx_save(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx)
 {
     int i;
     pres r;
+    struct schem_funcs funcs;
 
+    plog_dbg("Schemes save started");
+
+    /* Remove schemes in image */
+    for(i = 0; i < schem_cnt; i++) {
+        if(!schem_ctx->schemes_in_img[i]) {
+            continue;
+        }
+
+        /* Actually remove scheme only when it will not be overwritten */
+        if(!schem_ctx->schemes[i]) {
+            plog_dbg("Removing scheme #%d", i);
+
+            schem_map_funcs(&funcs, i);
+            r = funcs.remove(img_ctx);
+            if(!r) {
+                return pres_fail;
+            }
+        } else {
+            plog_dbg("Scheme #%d will not be removed due to an upcoming "
+                     "save", i);
+        }
+
+        /* Reset scheme presence flag */
+        schem_ctx->schemes_in_img[i] = 0;
+    }
+
+    /* Save new schemes */
     for(i = 0; i < schem_cnt; i++) {
         if(!schem_ctx->schemes[i]) {
             continue;
         }
 
+        plog_dbg("Saving scheme #%d", i);
         r = schem_ctx->schemes[i]->funcs.save(schem_ctx->schemes[i], img_ctx);
         if(!r) {
             return pres_fail;
         }
+
+        /* Set scheme presence flag */
+        schem_ctx->schemes_in_img[i] = 1;
     }
 
     return pres_ok;
@@ -247,9 +284,10 @@ enum schem_type schem_ctx_get_type(const struct schem_ctx *schem_ctx)
     return schem_cnt;
 }
 
-void schem_ctx_reset(struct schem_ctx *schem_ctx)
+void schem_ctx_reset(struct schem_ctx *schem_ctx, pflag keep_scheme_flags)
 {
     int i;
+
     for(i = 0; i < schem_cnt; i++) {
         if(!schem_ctx->schemes[i]) {
             continue;
@@ -258,6 +296,12 @@ void schem_ctx_reset(struct schem_ctx *schem_ctx)
         schem_free(schem_ctx->schemes[i]);
         free(schem_ctx->schemes[i]);
         schem_ctx->schemes[i] = NULL;
+    }
+
+    /* Also reset scheme presence flags */
+    if(!keep_scheme_flags) {
+        memset(schem_ctx->schemes_in_img, 0,
+               sizeof(schem_ctx->schemes_in_img));
     }
 }
 

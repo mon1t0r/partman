@@ -45,6 +45,10 @@ typedef pres (*schem_func_save) (
     const struct img_ctx    *img_ctx
 );
 
+typedef pres (*schem_func_remove) (
+    const struct img_ctx    *img_ctx
+);
+
 /* Unified scheme functions structure (contains function pointers) */
 struct schem_funcs {
     schem_func_init         init;
@@ -52,6 +56,7 @@ struct schem_funcs {
     schem_func_part_is_used part_is_used;
     schem_func_load         load;
     schem_func_save         save;
+    schem_func_remove       remove;
 };
 
 /* Unified scheme structure */
@@ -109,8 +114,11 @@ struct schem_part {
 
 /* Scheme context structure */
 struct schem_ctx {
-    /* Array of pointers to all possible schemes */
+    /* Array of pointers to all current schemes in memory */
     struct schem *schemes[schem_cnt];
+
+    /* Array, which indicates, which schemes are currently present in image */
+    pflag schemes_in_img[schem_cnt];
 };
 
 void schem_ctx_init(struct schem_ctx *schem_ctx);
@@ -121,12 +129,12 @@ pres schem_ctx_new(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx,
 pres
 schem_ctx_load(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx);
 
-pres schem_ctx_save(const struct schem_ctx *schem_ctx,
-                    const struct img_ctx *img_ctx);
+pres
+schem_ctx_save(struct schem_ctx *schem_ctx, const struct img_ctx *img_ctx);
 
 enum schem_type schem_ctx_get_type(const struct schem_ctx *schem_ctx);
 
-void schem_ctx_reset(struct schem_ctx *schem_ctx);
+void schem_ctx_reset(struct schem_ctx *schem_ctx, pflag keep_scheme_flags);
 
 void schem_part_delete(struct schem_part *part);
 

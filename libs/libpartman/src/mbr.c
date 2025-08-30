@@ -330,6 +330,15 @@ pres schem_save_mbr(const struct schem *schem, const struct img_ctx *img_ctx)
     return mbr_save(&mbr, img_ctx);
 }
 
+pres schem_remove_mbr(const struct img_ctx *img_ctx)
+{
+    struct mbr mbr;
+
+    memset(&mbr, 0, sizeof(mbr));
+
+    return mbr_save(&mbr, img_ctx);
+}
+
 void schem_mbr_set_prot(struct schem *schem)
 {
     struct schem_part *part;

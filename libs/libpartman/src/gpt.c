@@ -315,6 +315,16 @@ static void gpt_table_read(const pu8 *buf, struct gpt_part_ent table[],
     }
 }
 
+static void gpt_hdr_erase_sig(pu8 *buf)
+{
+    int i;
+
+    /* Write zeroes instead of signature */
+    for(i = 0; i < ARRAY_SIZE(GPT_SIG) - 1 ; i++) {
+        write_pu8(buf + i, 0);
+    }
+}
+
 static void gpt_hdr_write(pu8 *buf, const struct gpt_hdr *hdr)
 {
     int i;
@@ -710,14 +720,17 @@ static void gpt_calc_pos(const struct img_ctx *img_ctx,
     /* Secondary GPT header is located at image last LBA */
     *hdr_lba_sec = byte_to_lba(img_ctx, img_ctx->img_sz, 0) - 1;
 
-    /* GPT table size */
-    *table_sz = byte_to_lba(img_ctx, gpt_max_part_cnt * gpt_part_ent_sz, 1);
+    if(table_sz && table_lba_prim && table_lba_sec) {
+        /* GPT table size */
+        *table_sz = byte_to_lba(img_ctx, gpt_max_part_cnt * gpt_part_ent_sz,
+                                1);
 
-    /* Primary GPT table is located after primary GPT header */
-    *table_lba_prim = *hdr_lba_prim + 1;
+        /* Primary GPT table is located after primary GPT header */
+        *table_lba_prim = *hdr_lba_prim + 1;
 
-    /* Secondary GPT table is located before secondary GPT header */
-    *table_lba_sec = *hdr_lba_sec - *table_sz;
+        /* Secondary GPT table is located before secondary GPT header */
+        *table_lba_sec = *hdr_lba_sec - *table_sz;
+    }
 }
 
 static void gpt_from_schem(const struct schem *schem, struct gpt *gpt,
@@ -906,6 +919,53 @@ pres schem_save_gpt(const struct schem *schem, const struct img_ctx *img_ctx)
 
     /* Free tables */
     gpt_free(&gpt);
+
+    return res;
+}
+
+pres schem_remove_gpt(const struct img_ctx *img_ctx)
+{
+    plba hdr_lba_prim;
+    plba hdr_lba_sec;
+    pu8 *hdr_reg;
+    pres res;
+
+    gpt_calc_pos(img_ctx, &hdr_lba_prim, &hdr_lba_sec, NULL, NULL, NULL);
+
+    /* Map first sector of GPT primary header */
+    hdr_reg = map_secs(img_ctx, hdr_lba_prim, 1);
+    if(hdr_reg == NULL) {
+        plog_err("Failed to map GPT header at sector %llu to erase sig",
+                 hdr_lba_prim);
+        return pres_fail;
+    }
+
+    gpt_hdr_erase_sig(hdr_reg);
+
+    /* Unmap first sector of GPT primary header */
+    res = unmap_secs(hdr_reg, img_ctx, hdr_lba_prim, 1);
+    if(!res) {
+        plog_err("Failed to unmap GPT header at sector %llu to erase sig",
+                 hdr_lba_prim);
+        return pres_fail;
+    }
+
+    /* Map first sector of GPT secondary header */
+    hdr_reg = map_secs(img_ctx, hdr_lba_sec, 1);
+    if(hdr_reg == NULL) {
+        plog_err("Failed to map GPT header at sector %llu", hdr_lba_sec);
+        return pres_fail;
+    }
+
+    gpt_hdr_erase_sig(hdr_reg);
+
+    /* Unmap first sector of GPT secondary header */
+    res = unmap_secs(hdr_reg, img_ctx, hdr_lba_sec, 1);
+    if(!res) {
+        plog_err("Failed to unmap GPT header at sector %llu to erase sig",
+                 hdr_lba_sec);
+        return pres_fail;
+    }
 
     return res;
 }
