@@ -17,7 +17,7 @@ struct img_ctx {
     pu64 img_sz;
 
     /* Partition alignment, in sectors */
-    pu64 align;
+    plba align;
 
     /* Maximum logical number of heads per cylinder (max 255) */
     pu8 hpc;

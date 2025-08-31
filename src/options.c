@@ -12,10 +12,13 @@ static const struct option opts_long[] = {
     { "log-level",    required_argument, NULL, 'L' },
     { "sector-size",  required_argument, NULL, 'b' },
     { "min-img-size", required_argument, NULL, 'm' },
+    { "alignment",    required_argument, NULL, 'a' },
+    { "heads",        required_argument, NULL, 'H' },
+    { "sectors",      required_argument, NULL, 'S' },
     { 0,              0,                 0,    0   }
 };
 
-static const char opt_str[] = "L:b:m:";
+static const char opt_str[] = "L:b:m:a:H:S:";
 
 static void opts_err(const char *exec_name, const char *reason)
 {
@@ -47,6 +50,26 @@ static pres opts_parse_log_level(const char *arg, enum log_level *level_ptr)
     return pres_fail;
 }
 
+static pres opts_parse_pu8(const char *arg, pu8 *i_ptr)
+{
+    pu32 i;
+    pres res;
+
+    res = sscanf(arg, "%lu", &i) == 1;
+    if(!res) {
+        return pres_fail;
+    }
+
+    /* Out of bounds */
+    if((i & ~0xFF) != 0) {
+        return pres_fail;
+    }
+
+    *i_ptr = i;
+
+    return pres_ok;
+}
+
 static pres opts_parse_pu64(const char *arg, pu64 *i_ptr)
 {
     return sscanf(arg, "%llu", i_ptr) == 1;
@@ -54,16 +77,14 @@ static pres opts_parse_pu64(const char *arg, pu64 *i_ptr)
 
 static void opts_init_default(struct partman_opts *opts)
 {
+    memset(opts, 0, sizeof(*opts));
+
     /* Default logging for debug build */
 #ifdef DEBUG
     opts->log_level = log_debug;
 #else
     opts->log_level = log_info;
 #endif
-
-    opts->img_name = NULL;
-    opts->sec_sz = 512;
-    opts->img_sz = 0;
 }
 
 pres opts_parse(struct partman_opts *opts, int argc, char * const *argv)
@@ -101,6 +122,24 @@ pres opts_parse(struct partman_opts *opts, int argc, char * const *argv)
             case 'm':
                 if(!opts_parse_pu64(optarg, &opts->img_sz)) {
                     opts_err(argv[0], "min-img-size - invalid value");
+                    return pres_fail;
+                }
+                break;
+            case 'a':
+                if(!opts_parse_pu64(optarg, &opts->align)) {
+                    opts_err(argv[0], "alignment - invalid value");
+                    return pres_fail;
+                }
+                break;
+            case 'H':
+                if(!opts_parse_pu8(optarg, &opts->hpc)) {
+                    opts_err(argv[0], "heads - invalid value");
+                    return pres_fail;
+                }
+                break;
+            case 'S':
+                if(!opts_parse_pu8(optarg, &opts->spt)) {
+                    opts_err(argv[0], "sectors - invalid value");
                     return pres_fail;
                 }
                 break;

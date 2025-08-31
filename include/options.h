@@ -9,6 +9,9 @@ struct partman_opts {
     const char *img_name;
     pu64 sec_sz;
     pu64 img_sz;
+    plba align;
+    pu8 hpc;
+    pu8 spt;
 };
 
 pres opts_parse(struct partman_opts *opts, int argc, char * const *argv);

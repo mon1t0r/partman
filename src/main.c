@@ -602,7 +602,21 @@ img_init(struct img_ctx *img_ctx, const struct partman_opts *opts, int img_fd)
 init:
     img_ctx_init(img_ctx, opts->img_name, img_fd, sz);
 
-    img_ctx->sec_sz = opts->sec_sz;
+    if(opts->sec_sz) {
+        img_ctx->sec_sz = opts->sec_sz;
+    }
+
+    if(opts->align) {
+        img_ctx->align = opts->align;
+    }
+
+    if(opts->hpc) {
+        img_ctx->hpc = opts->hpc;
+    }
+
+    if(opts->spt) {
+        img_ctx->spt = opts->spt;
+    }
 
     return img_ctx_validate(img_ctx);
 }

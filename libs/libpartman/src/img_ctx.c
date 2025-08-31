@@ -45,6 +45,16 @@ pres img_ctx_validate(const struct img_ctx *ctx)
         return pres_fail;
     }
 
+    if(ctx->hpc < 1) {
+        plog_err("Heads per sector value is not in valid range (1-255)");
+        return pres_fail;
+    }
+
+    if(ctx->spt < 1 || ctx->spt > 63) {
+        plog_err("Sectors per track value is not in valid range (1-63)");
+        return pres_fail;
+    }
+
     return pres_ok;
 
 }

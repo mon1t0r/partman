@@ -67,6 +67,11 @@ IMG_FILE - image or device file
                             this parameter's value, image file will get
                             extended by writing a zero byte to the calculated
                             location. Do not use this parameter on device files
+-a --alignment              partition alignment value, in sectors
+-H --heads                  number of heads per cylinder, used by C/H/S
+                            conversion
+-S --sectors                number of sectors per track, used by C/H/S
+                            conversion
 ```
 
 ### Example usage
@@ -87,7 +92,6 @@ release/partman -b4096 hdd.img
 
 ## TODO
  - UI - display free sectors;
- - options - C/H/S configuration, alignment configuration;
  - code formatting;
  - perform testing with different image sizes;
  - perform testing on different platforms.
