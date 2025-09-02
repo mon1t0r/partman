@@ -1,9 +1,11 @@
-# Compiler configuration
 CC:=gcc
-CFLAGS:=-Iinclude/ -Ilibs/libpartman/include/ -Werror -Wall -ansi -pedantic -Wno-long-long
+CFLAGS:=-Wall -Iinclude/ -Ilibs/libpartman/include/
+STATIC:=-static
+
+# Libraries common for release/debug
 LDLIBS:=
 
-# Local libraries configuration
+# Release/debug specific libraries
 RELLIBS:=libs/libpartman/release/libpartman.a
 DBGLIBS:=libs/libpartman/debug/libpartman.a
 
@@ -27,13 +29,13 @@ RELCFLAGS:=-O3
 DBGDIR:=debug
 DBGTARGET:=$(DBGDIR)/$(TARGET)
 DBGOBJS:=$(addprefix $(DBGDIR)/, $(OBJS))
-DBGCFLAGS:=-g -O0 -DDEBUG
+DBGCFLAGS:=-O0 -Werror -Wno-long-long -ansi -pedantic -g -DDEBUG
 
 # Utility commands
 rm:=rm -rf
 mkdir:=mkdir -p
 
-.PHONY: all check clean debug release
+.PHONY: all release debug clean .FORCE
 
 all: release
 
@@ -41,7 +43,7 @@ all: release
 release: $(RELTARGET)
 
 $(RELTARGET): $(RELOBJS) $(RELLIBS)
-	$(CC) $(CFLAGS) $(RELCFLAGS) $^ $(LDLIBS) -o $@
+	$(CC) $(CFLAGS) $(RELCFLAGS) $(STATIC) $^ $(LDLIBS) -o $@
 
 $(RELDIR)/$(OBJDIR)/%.o : $(SRCDIR)/%.c
 	@$(mkdir) $(@D)
@@ -51,14 +53,14 @@ $(RELDIR)/$(OBJDIR)/%.o : $(SRCDIR)/%.c
 debug: $(DBGTARGET)
 
 $(DBGTARGET): $(DBGOBJS) $(DBGLIBS)
-	$(CC) $(CFLAGS) $(DBGCFLAGS) $^ $(LDLIBS) -o $@
+	$(CC) $(CFLAGS) $(DBGCFLAGS) $(STATIC) $^ $(LDLIBS) -o $@
 
 $(DBGDIR)/$(OBJDIR)/%.o : $(SRCDIR)/%.c
 	@$(mkdir) $(@D)
 	$(CC) $(CFLAGS) $(DBGCFLAGS) -c $^ $(LDLIBS) -o $@
 
 # Local libraries rules
-$(RELLIBS): .FORCE
+$(RELLIBS):
 	$(MAKE) -C $(dir $(patsubst %/,%,$(dir $@))) \
 		$(addprefix $(notdir $(patsubst %/,%,$(dir $@)))/, $(notdir $@))
 $(DBGLIBS): .FORCE
@@ -67,7 +69,7 @@ $(DBGLIBS): .FORCE
 
 # Other rules
 clean:
-	@$(rm) $(DBGDIR) $(RELDIR)
+	@$(rm) $(RELDIR) $(DBGDIR) $(dir $(RELLIBS)) $(dir $(DBGLIBS))
 
 .FORCE:
 

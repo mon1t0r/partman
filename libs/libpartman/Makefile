@@ -1,8 +1,6 @@
-# Compiler configuration
 CC:=gcc
-CFLAGS:=-Iinclude/ -Werror -Wall -ansi -pedantic -Wno-long-long
+CFLAGS:=-Wall -Iinclude/
 
-# ar configuration
 AR:=ar
 ARFLAGS:=rcs
 
@@ -26,7 +24,7 @@ RELCFLAGS:=-O3
 DBGDIR:=debug
 DBGTARGET:=$(DBGDIR)/$(TARGET)
 DBGOBJS:=$(addprefix $(DBGDIR)/, $(OBJS))
-DBGCFLAGS:=-g -O0 -DDEBUG
+DBGCFLAGS:=-O0 -Werror -Wno-long-long -ansi -pedantic -g -DDEBUG
 
 # Utility commands
 rm:=rm -rf
