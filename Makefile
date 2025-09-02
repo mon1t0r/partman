@@ -45,9 +45,9 @@ release: $(RELTARGET)
 $(RELTARGET): $(RELOBJS) $(RELLIBS)
 	$(CC) $(CFLAGS) $(RELCFLAGS) $(STATIC) $^ $(LDLIBS) -o $@
 
-$(RELDIR)/$(OBJDIR)/%.o : $(SRCDIR)/%.c
+$(RELDIR)/$(OBJDIR)/%.o: $(SRCDIR)/%.c
 	@$(mkdir) $(@D)
-	$(CC) $(CFLAGS) $(RELCFLAGS) -c $^ $(LDLIBS) -o $@
+	$(CC) $(CFLAGS) $(RELCFLAGS) -c $< $(LDLIBS) -o $@
 
 # Debug rules
 debug: $(DBGTARGET)
@@ -55,9 +55,9 @@ debug: $(DBGTARGET)
 $(DBGTARGET): $(DBGOBJS) $(DBGLIBS)
 	$(CC) $(CFLAGS) $(DBGCFLAGS) $(STATIC) $^ $(LDLIBS) -o $@
 
-$(DBGDIR)/$(OBJDIR)/%.o : $(SRCDIR)/%.c
+$(DBGDIR)/$(OBJDIR)/%.o: $(SRCDIR)/%.c
 	@$(mkdir) $(@D)
-	$(CC) $(CFLAGS) $(DBGCFLAGS) -c $^ $(LDLIBS) -o $@
+	$(CC) $(CFLAGS) $(DBGCFLAGS) -c $< $(LDLIBS) -o $@
 
 # Local libraries rules
 $(RELLIBS):
@@ -67,9 +67,18 @@ $(DBGLIBS): .FORCE
 	$(MAKE) -C $(dir $(patsubst %/,%,$(dir $@))) \
 		$(addprefix $(notdir $(patsubst %/,%,$(dir $@)))/, $(notdir $@))
 
+# Version header rules
+$(RELOBJS): include/_version.h
+
+$(DBGOBJS): include/_version.h
+
+include/_version.h: version
+	echo '#define PARTMAN_VERSION "'`head -1 version`'"' > $@
+
 # Other rules
 clean:
-	@$(rm) $(RELDIR) $(DBGDIR) $(dir $(RELLIBS)) $(dir $(DBGLIBS))
+	@$(rm) $(RELDIR) $(DBGDIR) $(dir $(RELLIBS)) $(dir $(DBGLIBS)) \
+		include/_version.h 
 
 .FORCE:
 

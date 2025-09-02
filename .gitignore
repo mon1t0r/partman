@@ -1,6 +1,7 @@
-# Executable directories
+# Temporary files
 debug/
 release/
+include/_version.h
 
 # clangd entries
 .cache/

@@ -8,6 +8,7 @@
 #include <time.h>
 #include <fcntl.h>
 
+#include "_version.h"
 #include "partman_types.h"
 #include "options.h"
 #include "log.h"
@@ -15,8 +16,6 @@
 #include "img_ctx.h"
 #include "schem.h"
 #include "mbr.h"
-
-#define PARTMAN_VER "1.0"
 
 /* Splitted help message (due to possible string length limitations) on
  * some compilers */
@@ -639,7 +638,7 @@ int main(int argc, char *const *argv)
     /* Set log level */
     plog_set_level(opts.log_level);
 
-    pprint("partman %s\n\n", PARTMAN_VER);
+    pprint("partman %s\n\n", PARTMAN_VERSION);
 
     /* Initialize random */
     srand(time(NULL));
