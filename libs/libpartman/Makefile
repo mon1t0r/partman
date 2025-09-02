@@ -2,7 +2,7 @@ CC:=gcc
 CFLAGS:=-Wall -Iinclude/
 
 AR:=ar
-ARFLAGS:=rcs
+ARFLAGS:=-rcs
 
 # Target file name
 TARGET:=libpartman.a
@@ -38,7 +38,7 @@ all: release
 release: $(RELTARGET)
 
 $(RELTARGET): $(RELOBJS)
-	$(AR) $(ARFLAGS) -o $@ $^
+	$(AR) $(ARFLAGS) $@ $^
 
 $(RELDIR)/$(OBJDIR)/%.o : $(SRCDIR)/%.c
 	@$(mkdir) $(@D)
@@ -48,7 +48,7 @@ $(RELDIR)/$(OBJDIR)/%.o : $(SRCDIR)/%.c
 debug: $(DBGTARGET)
 
 $(DBGTARGET): $(DBGOBJS)
-	$(AR) $(ARFLAGS) -o $@ $^
+	$(AR) $(ARFLAGS) $@ $^
 
 $(DBGDIR)/$(OBJDIR)/%.o : $(SRCDIR)/%.c
 	@$(mkdir) $(@D)

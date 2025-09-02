@@ -39,15 +39,21 @@ with type `0xEE` (GPT Protective). In this particular case, tuple
 ## Build and run
 ### Requirements
 ```
+ar
 gcc
-make
+GNU/make (make on Linux, gmake on BSD)
 ```
 
 ### Build
 ```
 git clone https://github.com/mon1t0r/partman
 cd partman
+
+On Linux:
 make
+
+On BSD:
+gmake
 ```
 
 ### Run

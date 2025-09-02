@@ -1,5 +1,5 @@
-/* lseek64() */
-#define _LARGEFILE64_SOURCE
+/* For lseek() return type to have 64 bit width on a 32 bit system */
+#define _FILE_OFFSET_BITS 64
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -561,9 +561,9 @@ img_init(struct img_ctx *img_ctx, const struct partman_opts *opts, int img_fd)
     char c;
 
     /* Get current image size */
-    sz = lseek64(img_fd, 0, SEEK_END);
+    sz = lseek(img_fd, 0, SEEK_END);
     if(sz == -1) {
-        perror("lseek64()");
+        perror("lseek()");
         return pres_fail;
     }
 
@@ -580,9 +580,9 @@ img_init(struct img_ctx *img_ctx, const struct partman_opts *opts, int img_fd)
               "required size", sz, opts->img_sz);
 
     /* Seek and write a single byte to ensure image size */
-    sz = lseek64(img_fd, opts->img_sz - 1, SEEK_SET);
+    sz = lseek(img_fd, opts->img_sz - 1, SEEK_SET);
     if(sz == -1) {
-        perror("lseek64()");
+        perror("lseek()");
         return pres_fail;
     }
 
