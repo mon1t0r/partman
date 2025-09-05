@@ -82,9 +82,10 @@ plba byte_to_lba(const struct img_ctx *ctx, pu64 bytes, pflag round_up)
     return bytes / ctx->sec_sz + (round_up && (bytes % ctx->sec_sz) ? 1 : 0);
 }
 
-plba lba_align(const struct img_ctx *ctx, plba lba, pflag round_up)
+plba lba_align(const struct img_ctx *ctx, plba lba, pflag next_aligned)
 {
-    return (lba / ctx->align + (round_up ? 1 : 0)) * ctx->align;
+    return (lba / ctx->align) * ctx->align +
+           (next_aligned && (lba % ctx->align) ? ctx->align : 0);
 }
 
 pchs lba_to_chs(const struct img_ctx *ctx, plba lba, pflag protective_limit)

@@ -470,8 +470,9 @@ plba_res schem_find_last_sector(const struct schem *schem,
     /* Check if LBA can be aligned */
     test_end_lba = lba_align(img_ctx, next_lba_bound, 0);
 
-    /* Minus 1 sector to get the end LBA of the previous alignment segment */
-    if(test_end_lba > 0) {
+    /* Minus 1 sector to get the end LBA of the previous alignment segment,
+     * if alignment segment size is greater than 1 LBA */
+    if(test_end_lba > 0 && img_ctx->align > 1) {
         test_end_lba--;
     }
 
