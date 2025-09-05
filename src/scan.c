@@ -60,7 +60,7 @@ enum scan_res scan_str(char *buf, int buf_sz)
 
 enum scan_res scan_char(char *c)
 {
-    char buf[scan_buf_sz];
+    char buf[scan_buf_sz] = {0};
     enum scan_res res;
     int i;
 
@@ -81,7 +81,7 @@ enum scan_res scan_char(char *c)
 
 enum scan_res scan_guid(struct guid *guid)
 {
-    char buf[scan_buf_sz];
+    char buf[scan_buf_sz] = {0};
     enum scan_res scan_res;
     pres proc_res;
 
@@ -97,7 +97,7 @@ enum scan_res scan_guid(struct guid *guid)
 
 enum scan_res scan_int(const char *format, void *int_ptr)
 {
-    char buf[scan_buf_sz];
+    char buf[scan_buf_sz] = {0};
     enum scan_res res;
     int i;
 
@@ -122,7 +122,7 @@ prompt_sector_ext(const char *prompt, plba start, plba end, plba def,
 {
     static const char modifiers[] = { 'K', 'M', 'G', 'T', 'P' };
 
-    char buf[scan_buf_sz];
+    char buf[scan_buf_sz] = {0};
     enum scan_res res;
     char *s;
     int i;
