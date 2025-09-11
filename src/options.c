@@ -92,7 +92,7 @@ pres opts_parse(struct partman_opts *opts, int argc, char * const *argv)
     extern int optind;
     extern char *optarg;
 
-    char c;
+    int c;
 
     opts_init_default(opts);
 

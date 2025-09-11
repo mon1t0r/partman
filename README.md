@@ -18,8 +18,8 @@ users, familiar with `fdisk` should have no problem in using `partman`.
 with mentioned partitioning schemes.
 
 The program is written in plain `ANSI C`, however `long long` type is required
-in order to compile. The program should also be `endian-independent`, and `no
-compiler extensions` are used.
+in order to compile. The program is also `endian-independent`, and `no compiler
+extensions` are used.
 
 Required basic type sizes are:
 - `char`      - 1 byte;
